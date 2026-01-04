@@ -1,0 +1,570 @@
+<!--
+APP: AI Strategy Room (AI会議室)
+FILE: index.html
+VERSION: v16.2.1-failsafe-watchdog-01
+DATE(JST): 2026-01-04 15:20 JST
+TITLE: オート会話の完全停止防止（Watchdog 60秒）＋返り値正規化強化
+CHANGES:
+- runStepにWatchdog（60秒）を追加：成功/失敗/タイムアウトのどれでも必ず次へ進む
+- 遅延返答の二重描画を防止（doneガード）
+- オート会話開始時に「司会以外が0人」チェックを追加
+AUTHOR: Yui (Integration) / Based on Claude & Gemini proposals
+BUILD_PARAM: ?b=2026-01-04_1520_watchdog-01
+DEBUG_PARAM: &debug=1
+-->
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Strategy Room v16.2.1-failsafe-watchdog-01</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+<style>
+  :root { 
+    --bg-color: #f0f2f5; --card-bg: #ffffff; --text-main: #333; 
+    --shadow-btn: 0 4px 6px rgba(0,0,0,0.1);
+    
+    /* AI Theme Colors */
+    --col-yui: #ec4899; --col-gemini: #8b5cf6; --col-rex: #f59e0b;
+    --col-deepseek: #3b82f6; --col-llama: #06b6d4; --col-qwen: #84cc16;
+    --col-mistral: #a855f7; --col-dolphin: #ef4444;
+    
+    /* Role Colors */
+    --role-proposer: #3b82f6;
+    --role-opposer: #ef4444;
+    --role-tech: #eab308;
+    --role-observer: #94a3b8;
+  }
+
+  body { background-color: var(--bg-color); font-family: 'Helvetica Neue', Arial, sans-serif; color: var(--text-main); margin: 0; padding: 20px; font-size: 16px; transition: font-size 0.2s; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .card { background: var(--card-bg); border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); padding: 24px; margin-bottom: 24px; border: 1px solid #e5e7eb; }
+
+  /* Header */
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  .app-title { font-size: 1.5rem; font-weight: 800; color: #1f2937; text-shadow: 1px 1px 1px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+  .app-meta { font-size: 0.75rem; color: #64748b; font-weight: normal; margin-top: 4px; background: #e2e8f0; padding: 2px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
+
+  /* Buttons & Inputs */
+  .btn, .mode-btn, .agent-badge { box-shadow: var(--shadow-btn); transition: 0.2s; cursor: pointer; font-weight: bold; border: none; }
+  .btn:active, .mode-btn:active, .agent-badge:active { transform: translateY(2px); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+  .btn { padding: 0 20px; height: 44px; border-radius: 22px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.95rem; }
+  .btn-secondary { background: #fff; border: 1px solid #cbd5e1; color: #475569; }
+  .btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
+  .btn-primary { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+  .btn-primary:hover { filter: brightness(1.1); }
+  
+  .title-input { width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.1rem; box-sizing: border-box; }
+  textarea { width: 100%; height: 150px; padding: 16px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; resize: vertical; box-sizing: border-box; font-family: monospace; }
+  textarea:focus { border-color: #10b981; outline: none; background: #f0fdf4; }
+
+  /* Settings Area */
+  .settings-area { display: none; background: #f8fafc; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-top: 15px; animation: fadeIn 0.3s; }
+  .control-row { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 10px; }
+  .mode-switch { display: flex; gap: 15px; margin-bottom: 20px; justify-content: center; }
+  .mode-btn { flex: 1; max-width: 200px; height: 50px; border: 2px solid #e2e8f0; background: #fff; color: #94a3b8; font-size: 1rem; border-radius: 25px; }
+  .mode-btn.active { border-color: #10b981; color: #fff; background: linear-gradient(135deg, #10b981, #059669); }
+  
+  .badge-zone { flex-grow: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .agent-badge { padding: 10px 18px; border-radius: 25px; background: #fff; border: 2px solid transparent; color: #64748b; font-size: 0.9rem; }
+  .agent-badge.selected { color: white; }
+  /* Agent Colors */
+  [data-agent="yui"].selected { background: var(--col-yui); }
+  [data-agent="gemini"].selected { background: var(--col-gemini); }
+  [data-agent="rex"].selected { background: var(--col-rex); }
+  [data-agent="deepseek"].selected { background: var(--col-deepseek); }
+  [data-agent="llama"].selected { background: var(--col-llama); }
+  [data-agent="qwen"].selected { background: var(--col-qwen); }
+  [data-agent="mistral"].selected { background: var(--col-mistral); }
+  [data-agent="dolphin"].selected { background: var(--col-dolphin); }
+
+  /* ★画像ホバー拡大 (Wikipedia風・巨大化版)★ */
+  .preview-wrapper { position: relative; display: inline-block; margin-right: 8px; margin-bottom: 8px; }
+  .preview-thumb { height: 50px; border-radius: 4px; border: 2px solid #cbd5e1; cursor: pointer; transition: 0.2s; background: white; object-fit: cover; }
+  .preview-thumb:hover { border-color: #10b981; transform: scale(1.05); }
+  
+  .preview-popup {
+    display: none;
+    position: absolute;
+    bottom: 60px;
+    left: 0;
+    width: 800px; /* ★幅800pxに拡大 */
+    max-width: 80vw;
+    background: white;
+    padding: 12px;
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    border: 1px solid #cbd5e1;
+    z-index: 9999;
+    animation: fadeIn 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  }
+  .preview-popup img { width: 100%; height: auto; border-radius: 8px; display: block; }
+  .preview-wrapper:hover .preview-popup { display: block; }
+  .preview-popup::after {
+    content: ""; position: absolute; top: 100%; left: 20px;
+    border-width: 10px; border-style: solid; border-color: white transparent transparent transparent;
+  }
+
+  /* Log List Styles */
+  .log-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #e2e8f0; background: #fff; border-radius: 8px; margin-bottom: 8px; border: 1px solid #f1f5f9; }
+  .log-item:hover { background: #f8fafc; border-color: #cbd5e1; }
+  .log-text { cursor: pointer; flex-grow: 1; color: #334155; font-weight: bold; font-size: 0.95rem; }
+  .log-text:hover { color: #2563eb; }
+  .log-del-btn { background: #ef4444; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: bold; border: none; }
+  .log-del-btn:hover { background: #dc2626; }
+
+  /* Timeline & Cards */
+  .main-stage { display: none; margin-top: 20px; }
+  .timeline { display: flex; flex-direction: column; gap: 20px; }
+  .timeline-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #eee; border-left: 5px solid transparent; transition: 0.3s; }
+  .tl-header { padding: 10px 15px; font-size: 0.9rem; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+  .tl-body { padding: 15px 20px; font-size: 1rem; line-height: 1.7; color: #333; }
+  
+  .role-proposer { border-color: var(--role-proposer); }
+  .role-opposer { border-color: var(--role-opposer); }
+  .role-tech { border-color: var(--role-tech); }
+  .role-badge { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; color: #fff; margin-left: 8px; vertical-align: middle; }
+  
+  .manual-grid { display: none; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 1000px) { .manual-grid { grid-template-columns: repeat(2, 1fr); } }
+  .mini-col { height: 500px; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+  .mini-body { overflow-y: auto; flex: 1; padding: 10px; }
+  
+  /* Utilities */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 2000; backdrop-filter: blur(3px); }
+  .modal-content { background: #fff; width: 90%; max-width: 800px; max-height: 80vh; border-radius: 16px; padding: 25px; display: flex; flex-direction: column; }
+  .font-ctrl-group { display: flex; background: #fff; border-radius: 20px; padding: 3px; border: 1px solid #cbd5e1; }
+  .font-btn { border: none; background: transparent; padding: 5px 12px; cursor: pointer; font-size: 0.8rem; color: #64748b; border-radius: 16px; }
+  .font-btn.active { background: #334155; color: #fff; }
+  .code-link-btn { display: inline-block; background: #1e293b; color: #fff; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-family: monospace; font-size: 0.85rem; cursor: pointer; margin: 8px 0; border: none; }
+  .code-modal-content { width: 95%; max-width: 1200px; height: 90vh; background: #1e1e1e; color: #fff; padding: 0; }
+  .code-modal-body { flex: 1; overflow: auto; padding: 20px; }
+  
+  /* Progress */
+  .progress-zone { max-width: 1400px; margin: 20px auto; padding: 20px; background: rgba(255,255,255,0.95); border-radius: 16px; display: none; border: 1px solid #e5e7eb; overflow-x: auto; }
+  .progress-bar { display: flex; justify-content: space-between; position: relative; min-width: 100%; }
+  .progress-line { position: absolute; top: 15px; left: 0; right: 0; height: 4px; background: #e2e8f0; z-index: 0; }
+  .step { position: relative; z-index: 1; text-align: center; width: 80px; flex-shrink: 0; }
+  .step-dot { width: 34px; height: 34px; background: #e2e8f0; border-radius: 50%; margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #94a3b8; transition: 0.3s; border: 2px solid #fff; }
+  .step.active .step-dot { background: #10b981; color: #fff; transform: scale(1.1); }
+  .step-label { font-size: 0.75rem; color: #64748b; font-weight: bold; }
+  
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<!--
+ * VERSION: v15.1-chatloop-fix
+ * BUILD: 2026-01-04_0059_chatloop-fix01
+ * AUTHOR: Rex
+ * TITLE: オート会話ループ修正版（UI構造固定）
+ * CHANGES:
+ * - startAuto: Promiseチェーンを「必ず次へ進む」構造に修正
+ * - runStep: エラー時も自動応答を表示して次のステップへ進む
+ * - targets空対策: オート開始時に参加者が2人未満ならアラート
+ * - GAS返り値の正規化: typeof raw で分岐して常に .response を取得
+ * - 見た目変更なし（HTML構造/CSS/文言/ボタン配置は完全維持）
+ * DEBUG_PARAM: ?debug=1
+ * BUILD_PARAM: ?b=2026-01-04_0059_chatloop-fix01
+-->
+<div class="container" id="appContainer">
+  <div class="header">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div class="app-title">AI Round Table <span class="app-meta">v16.2.1-failsafe-watchdog-01</span></div>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div class="font-ctrl-group">
+        <button class="font-btn" onclick="setFontSize('small')">小</button>
+        <button class="font-btn active" onclick="setFontSize('medium')" id="btn-font-m">中</button>
+        <button class="font-btn" onclick="setFontSize('large')">大</button>
+      </div>
+      <button class="btn btn-secondary" onclick="openHistoryModal()">📂 ログ</button>
+      <button class="btn btn-secondary" onclick="tryReset()">🔄 リセット</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+      <div id="statusText" style="font-weight:bold; color:#10b981;">待機中...</div>
+      <div id="clock" style="color:#94a3b8; font-weight:bold;"></div>
+    </div>
+
+    <input type="text" id="topicTitle" class="title-input" placeholder="タイトル (例: 新規事業案の検討)">
+    <textarea id="themeInput" placeholder="ここに議題を入力してください..."></textarea>
+    
+    <div style="margin-top:15px; display:flex; flex-wrap:wrap; gap:10px;">
+      <input type="file" id="fileInput" hidden multiple onchange="handleFileSelect(event)">
+      <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">📷 画像</button>
+      <button class="btn btn-secondary" onclick="pasteFromClipboard()">📋 貼付</button>
+      <button class="btn btn-secondary" onclick="insertTemplate()" style="color:#3b82f6; border-color:#3b82f6;">📄 Code貼付枠</button>
+      <button class="btn btn-secondary" onclick="resetInput()">🧹 クリア</button>
+      <button class="btn btn-secondary" onclick="uploadCode()">💾 GitHub</button>
+    </div>
+    <div id="previewArea" style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap; min-height:10px;"></div>
+
+    <hr style="border:0; border-top:1px solid #e2e8f0; margin:25px 0;">
+
+    <div style="text-align:center; margin-bottom:10px; font-weight:bold; color:#64748b;">STEP 1: モードを選択</div>
+    <div class="mode-switch">
+      <button id="mode-auto" class="mode-btn" onclick="setMode('auto')">🤖 オート (円卓会議)</button>
+      <button id="mode-manual" class="mode-btn" onclick="setMode('manual')">📝 マニュアル (並列)</button>
+    </div>
+
+    <div id="settingsArea" class="settings-area">
+      <div style="margin-bottom:10px; font-weight:bold; color:#64748b;">STEP 2: 参加AIと役割の設定</div>
+      <div class="control-row">
+        <div id="mcWrapper" class="mc-zone" style="margin-right:15px;">
+          <label style="font-weight:bold; margin-right:5px; color:#475569;">🎤 司会:</label>
+          <select id="mcSelect" class="mc-select"></select>
+        </div>
+        <div id="roundWrapper" style="display:none; margin-right:15px;">
+          <label style="font-weight:bold; margin-right:5px; color:#475569;">🔄 議論:</label>
+          <select id="roundSelect" class="mc-select">
+            <option value="1">1クール (即決)</option>
+            <option value="2" selected>2クール (深堀)</option>
+            <option value="3">3クール (徹底)</option>
+          </select>
+        </div>
+        <div class="badge-zone" id="agentBadges"></div>
+        <div class="start-zone">
+          <button id="startBtn" class="btn btn-primary" onclick="startProcess()">🚀 会議スタート</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="progressZone" class="progress-zone">
+    <div class="progress-bar" id="progressBarInner"></div>
+  </div>
+
+  <div id="mainStage" class="main-stage">
+    <div style="font-size:1.2rem; font-weight:800; margin-bottom:15px; border-left:6px solid #333; padding-left:15px; color:#333;">🔴 LIVE TIMELINE</div>
+    <div id="timeline" class="timeline"></div>
+  </div>
+
+  <div id="manualGrid" class="manual-grid"></div>
+</div>
+
+<div id="historyModal" class="modal-overlay"><div class="modal-content"><div style="display:flex;justify-content:space-between;margin-bottom:15px;"><h2>📂 過去ログ</h2><button onclick="closeHistoryModal()" class="btn btn-secondary">✕</button></div><div id="logList" style="overflow-y:auto;flex:1;"></div></div></div>
+<div id="resetModal" class="modal-overlay"><div class="modal-content" style="max-width:400px;text-align:center;"><h3 style="margin-top:0;">🔄 リセットしますか？</h3><p style="color:#666;">画面の内容と一時保存データがクリアされます。<br>(過去ログは消えません)</p><div style="display:flex;justify-content:center;gap:10px;margin-top:20px;"><button class="btn btn-secondary" onclick="closeModal('resetModal')">キャンセル</button><button class="btn btn-danger" onclick="performReset()">実行する</button></div></div></div>
+<div id="codeModal" class="modal-overlay" style="z-index:3000;"><div class="modal-content code-modal-content"><div style="padding:15px;background:#2d2d2d;display:flex;justify-content:space-between;"><span style="font-weight:bold;color:#fff;">📜 ソースコード</span><div><button class="btn btn-primary" style="height:32px;font-size:0.8rem;" onclick="copyCode()">コピー</button> <button onclick="document.getElementById('codeModal').style.display='none'" class="btn btn-secondary" style="background:#444;color:#fff;border:none;">✕</button></div></div><div class="code-modal-body"><pre><code id="codeViewerContent"></code></pre></div></div></div>
+
+<script>
+const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
+let selected = ['yui','gemini','rex','deepseek'];
+let currentMode = null;
+let imagesBase64 = []; let context = ""; let sessionId = "SESS_"+Date.now();
+let codeSnippets = [];
+let assignedRoles = {};
+const STORAGE_KEY = 'ai_round_v15_1_fix';
+
+window.onload = () => { updateClock(); setInterval(updateClock,60000); initUI(); };
+
+function initUI() {
+  const con = document.getElementById('agentBadges');
+  const mcSel = document.getElementById('mcSelect');
+  mcSel.innerHTML = ""; con.innerHTML = "";
+  AGENTS.forEach(a => {
+    const span = document.createElement('span');
+    span.className = `agent-badge ${selected.includes(a)?'selected':''}`;
+    span.setAttribute('data-agent', a); span.id = `badge-${a}`;
+    span.innerText = a.charAt(0).toUpperCase() + a.slice(1);
+    span.onclick = () => toggleAgent(a);
+    con.appendChild(span);
+    const opt = document.createElement('option');
+    opt.value = a; opt.innerText = a.charAt(0).toUpperCase() + a.slice(1);
+    mcSel.appendChild(opt);
+  });
+}
+
+function updateClock(){document.getElementById('clock').innerText=new Date().toLocaleString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
+function setFontSize(s) {
+  const r = document.body; document.querySelectorAll('.font-btn').forEach(b=>b.classList.remove('active'));
+  if(s==='small'){r.style.fontSize='14px'; document.querySelectorAll('.font-btn')[0].classList.add('active');}
+  if(s==='medium'){r.style.fontSize='16px'; document.querySelectorAll('.font-btn')[1].classList.add('active');}
+  if(s==='large'){r.style.fontSize='20px'; document.querySelectorAll('.font-btn')[2].classList.add('active');}
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-auto').classList.toggle('active', mode==='auto');
+  document.getElementById('mode-manual').classList.toggle('active', mode==='manual');
+  document.getElementById('settingsArea').style.display = 'block';
+  document.getElementById('mcWrapper').style.display = (mode==='auto') ? 'block' : 'none';
+  document.getElementById('roundWrapper').style.display = (mode==='auto') ? 'block' : 'none';
+  document.getElementById('mainStage').style.display = 'none';
+  document.getElementById('manualGrid').style.display = 'none';
+  document.getElementById('progressZone').style.display = 'none';
+}
+
+function toggleAgent(a) {
+  if(selected.includes(a)) { if(selected.length > 1) selected = selected.filter(x => x!==a); }
+  else selected.push(a);
+  AGENTS.forEach(ag => {
+    const el = document.getElementById(`badge-${ag}`);
+    if(selected.includes(ag)) el.classList.add('selected'); else el.classList.remove('selected');
+  });
+}
+
+function insertTemplate() {
+  const t = document.getElementById('themeInput');
+  const template = `\n--------------------------------------------------\n【ファイル名: index.html】\n(ここにコードを貼る)\n\n--------------------------------------------------\n【ファイル名: Code.gs】\n(ここにコードを貼る)\n`;
+  t.value = t.value + template; t.focus();
+}
+
+function resetInput() { document.getElementById('themeInput').value = ''; imagesBase64 = []; document.getElementById('previewArea').innerHTML = ''; }
+function tryReset() { document.getElementById('resetModal').style.display='flex'; }
+function performReset() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
+function closeModal(id) { document.getElementById(id).style.display='none'; }
+
+function buildProgressBar(totalSteps) {
+  const bar = document.getElementById('progressBarInner');
+  bar.innerHTML = '<div class="progress-line"></div>';
+  for(let i=1; i<=totalSteps; i++) {
+    let label = i===1 ? "開始" : i===totalSteps ? "完了" : "議論";
+    bar.innerHTML += `<div class="step" id="s${i}"><div class="step-dot">${i}</div><div class="step-label">${label}</div></div>`;
+  }
+}
+function updateStep(s){ 
+  const steps = document.querySelectorAll('.step');
+  steps.forEach((el, idx) => { if(idx+1 === s) el.classList.add('active'); else el.classList.remove('active'); });
+}
+
+function startProcess() {
+  const theme = document.getElementById('themeInput').value;
+  if(!theme) return alert("議題を入力してください");
+  if(!currentMode) return alert("モードを選択してください");
+  document.getElementById('statusText').innerText = "🚀 実行中...";
+  if(currentMode === 'auto') startAuto(theme); else startManual(theme);
+}
+
+/**
+ * ★★★ オート会議開始（修正版）★★★
+ * 
+ * 【修正ポイント】
+ * 1. targets空対策: 参加者が2人未満ならアラート
+ * 2. Promiseチェーンを「必ず次へ進む」構造に修正
+ * 3. エラー時も自動応答を表示して次のステップへ進む
+ */
+function startAuto(theme) {
+  document.getElementById('mainStage').style.display = 'block';
+  document.getElementById('progressZone').style.display = 'block';
+  document.getElementById('timeline').innerHTML = '';
+  
+  const mc = document.getElementById('mcSelect').value;
+  const rounds = parseInt(document.getElementById('roundSelect').value, 10);
+  
+  // ★★ targets空対策: 参加者が2人未満ならアラート ★★
+  let members = selected.filter(a => a !== mc);
+  if (members.length < 1) {
+    alert('⚠ エラー: 司会以外の参加者が1人以上必要です。\n参加AIを選択してください。');
+    document.getElementById('statusText').innerText = "❌ エラー: 参加者不足";
+    document.getElementById('statusText').style.color = 'red';
+    return;
+  }
+  
+  const totalSteps = 2 + (members.length * rounds);
+  buildProgressBar(totalSteps);
+
+  google.script.run.withSuccessHandler(roles => {
+    assignedRoles = roles;
+    context = `[User]: ${theme}\n`;
+    const title = document.getElementById('topicTitle').value;
+    const imgs = [...imagesBase64];
+    let stepCount = 1;
+
+    // ★★ Promiseチェーンを「必ず次へ進む」構造に修正 ★★
+    // async関数でループを回す（エラーでも必ず次へ進む）
+    (async function runAutoLoop() {
+      try {
+        // MC開始
+        await runStep(mc, `ユーザー議題:「${theme}」\n司会として議論を開始し、役割（提案者・反論者）を指名して議論を始めてください。`, imgs, title, stepCount++, 'mc');
+
+        // ラウンドループ
+        for (let r=1; r<=rounds; r++) {
+          let prefix = (rounds > 1) ? `【ラウンド ${r}/${rounds}】` : "";
+          
+          // 提案者ターン
+          const proposers = members.filter(a => assignedRoles[a] === 'proposer');
+          for (const agent of proposers) {
+            await runStep(agent, `${prefix}提案者として、具体的かつ論理的な解決策を提示してください。`, [], title, stepCount++, 'proposer');
+          }
+          
+          // その他の役割ターン
+          const others = members.filter(a => assignedRoles[a] !== 'proposer');
+          for (const agent of others) {
+            let role = assignedRoles[agent];
+            let msg = `${prefix}提案に対して意見してください。`;
+            if(role === 'opposer') msg = `${prefix}反論者として、提案のリスクや欠陥を厳しく指摘してください。`;
+            if(role === 'tech') msg = `${prefix}技術顧問として、コードや実装の実現可能性を検証してください。`;
+            await runStep(agent, msg, [], title, stepCount++, role);
+          }
+        }
+
+        // MC総括
+        const finalInst = `議論を総括し、提案・反論・技術検証を統合して、最終的な【完全な解決策/コード】を作成してください。`;
+        await runStep(mc, finalInst, [], title, stepCount, 'mc');
+        
+        // 完了
+        document.getElementById('statusText').innerText = "✅ 完了";
+        document.getElementById('statusText').style.color = '#10b981';
+        saveStorage();
+        
+      } catch (e) {
+        // ★最終的なエラーでも、ここまでの結果は表示済み
+        console.error('Auto loop fatal error:', e);
+        document.getElementById('statusText').innerText = "⚠ 一部エラー（結果は表示済み）";
+        document.getElementById('statusText').style.color = '#f59e0b';
+      }
+    })();
+    
+  }).getRoleAssignment(selected, mc);
+}
+
+/**
+ * ★★★ 1ステップ実行（修正版）★★★
+ * 
+ * 【修正ポイント】
+ * 1. エラー時も必ず resolve して次へ進む（reject しない）
+ * 2. GAS返り値の正規化: typeof で分岐して常に .response を取得
+ * 3. 自動応答をタイムライン表示
+ */
+function runStep(speaker, instr, imgs, title, step, role){
+  return new Promise((resolve, reject)=>{
+    updateStep(step);
+    const tl = document.getElementById('timeline');
+    const id = Date.now();
+    let roleBadge = ""; let roleClass = "";
+    if(role === 'proposer') { roleBadge='<span class="role-badge" style="background:var(--role-proposer);">提案</span>'; roleClass='role-proposer'; }
+    if(role === 'opposer') { roleBadge='<span class="role-badge" style="background:var(--role-opposer);">反論</span>'; roleClass='role-opposer'; }
+    if(role === 'tech') { roleBadge='<span class="role-badge" style="background:var(--role-tech);">技術</span>'; roleClass='role-tech'; }
+
+    tl.insertAdjacentHTML('beforeend', `<div class="timeline-card ${roleClass}"><div class="tl-header h-${speaker}"><span>${speaker.toUpperCase()} ${roleBadge}</span><span>Thinking...</span></div><div class="tl-body" id="ans-${id}"><div class="loader">...</div></div></div>`);
+    window.scrollTo(0, document.body.scrollHeight);
+
+    // Watchdog: サーバー応答が返らず沈黙しても、必ず次へ進む
+    const WATCHDOG_MS = 60000;
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      const msg = `(⏱ タイムアウト: ${WATCHDOG_MS/1000}秒 応答なし → 次へ進みます)`;
+      const ansEl = document.getElementById(`ans-${id}`);
+      if (ansEl) ansEl.innerHTML = `<span style="color:#b45309; font-weight:bold;">${msg}</span>`;
+      context += `[${speaker}]: ${msg}\n`;
+      resolve();
+    }, WATCHDOG_MS);
+
+    
+    // ★★ GAS呼び出し（返り値を正規化） ★★
+    google.script.run
+      .withSuccessHandler(raw => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        // ★返り値の正規化: typeof で分岐
+        let responseText = "";
+        if (typeof raw === "string") {
+          // 文字列で返ってきた場合
+          try {
+            const parsed = JSON.parse(raw);
+            responseText = parsed.response || parsed.text || parsed.message || raw;
+          } catch (e) {
+            // JSONパース失敗 → そのまま文字列として扱う
+            responseText = raw;
+          }
+        } else if (typeof raw === "object" && raw !== null) {
+          // オブジェクトで返ってきた場合
+          responseText = raw.response || raw.text || raw.message || JSON.stringify(raw);
+        } else {
+          // その他（null/undefined等）
+          responseText = "(空の応答)";
+        }
+        
+        // タイムライン表示
+        document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(responseText);
+        context += `[${speaker}]: ${responseText}\n`;
+        
+        // ★必ず resolve（次へ進む）
+        resolve();
+      })
+      .withFailureHandler(e => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        // ★通信エラー時も自動応答を表示して次へ進む
+        console.error('GAS call failed:', e);
+        const fallbackText = `**${speaker}**（${role || "observer"}）です。\n\n(※通信エラーのため自動応答)\nエラー詳細: ${e.message || e}`;
+        document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(fallbackText);
+        context += `[${speaker}]: ${fallbackText}\n`;
+        
+        // ★必ず resolve（エラーでも次へ進む）
+        resolve();
+      })
+      .runConferenceTurn(speaker, context, instr, imgs, sessionId, title, role);
+  });
+}
+
+function startManual(theme) {
+  const grid = document.getElementById('manualGrid');
+  grid.style.display = 'grid'; grid.innerHTML = "";
+  const cols = Math.min(selected.length, 4);
+  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  selected.forEach(a => {
+    const div = document.createElement('div'); div.className = 'mini-col';
+    const id = `hist-${a}-${Date.now()}`;
+    div.innerHTML = `<div class="mini-head h-${a}">${a.toUpperCase()}</div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
+    grid.appendChild(div);
+    google.script.run.withSuccessHandler(r => {
+      document.getElementById(id).innerHTML = formatMarkdown(r.response); saveStorage();
+    }).runConferenceTurn(a, theme, theme, imagesBase64, sessionId, "", null);
+  });
+  document.getElementById('statusText').innerText = "✅ 完了";
+}
+
+function formatMarkdown(text) {
+  let formatted = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, l, c) => {
+    const i = codeSnippets.length; codeSnippets.push({ l: l||'text', c: c.trim() });
+    return `__CODE_${i}__`;
+  });
+  formatted = formatted.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  return formatted.replace(/__CODE_(\d+)__/g, (m, i) => `<button class="code-link-btn" onclick="openCode(${i})">📜 コード (${codeSnippets[i].l})</button>`);
+}
+function openCode(i) {
+  const s = codeSnippets[i]; const el = document.getElementById('codeViewerContent');
+  el.textContent = s.c; el.className = `language-${s.l}`; hljs.highlightElement(el);
+  document.getElementById('codeModal').style.display = 'flex';
+}
+function copyCode() { navigator.clipboard.writeText(document.getElementById('codeViewerContent').textContent).then(()=>alert("コピーしました")); }
+function uploadCode(){const c=document.getElementById('themeInput').value;if(c)google.script.run.withSuccessHandler(alert).uploadToGithub(prompt("File?","Code.gs"),c);}
+
+// Image Handling
+async function handleFileSelect(e){
+  const f=Array.from(e.target.files);
+  for(const x of f){
+    const c=await compress(x);
+    imagesBase64.push(c);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'preview-wrapper';
+    wrapper.innerHTML = `<img src="${c}" class="preview-thumb"><div class="preview-popup"><img src="${c}"></div>`;
+    document.getElementById('previewArea').appendChild(wrapper);
+  }
+}
+function compress(b){return new Promise(r=>{const f=new FileReader();f.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let w=i.width,h=i.height;if(w>1000||h>1000){const s=Math.min(1000/w,1000/h);w*=s;h*=s;}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);r(c.toDataURL('image/jpeg',0.7));};i.src=e.target.result;};f.readAsDataURL(b);});}
+async function pasteFromClipboard(){const i=await navigator.clipboard.read();for(const x of i){const t=x.types.find(a=>a.startsWith('image/'));if(t){const b=await x.getType(t);const c=await compress(b);imagesBase64.push(c);const w=document.createElement('div');w.className='preview-wrapper';w.innerHTML=`<img src="${c}" class="preview-thumb"><div class="preview-popup"><img src="${c}"></div>`;document.getElementById('previewArea').appendChild(w);}}}
+
+function saveStorage(){localStorage.setItem(STORAGE_KEY, document.getElementById('mainStage').innerHTML);} 
+// Log functions
+function openHistoryModal(){document.getElementById('historyModal').style.display='flex';google.script.run.withSuccessHandler(l=>{document.getElementById('logList').innerHTML=l.map(x=>`<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${x.time} ${x.title||'(無題)'}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`).join('');}).getLogList();}
+function closeHistoryModal(){document.getElementById('historyModal').style.display='none';}
+function loadLog(id){if(!confirm("Load?"))return;closeHistoryModal();google.script.run.withSuccessHandler(ls=>{setMode('manual');const g=document.getElementById('manualGrid');g.style.display='grid';g.innerHTML="";g.style.gridTemplateColumns='1fr';ls.forEach(l=>{g.innerHTML+=`<div class="mini-col"><div class="mini-head" style="background:#eee;">${l.speaker}</div><div class="mini-body">${formatMarkdown(l.content)}</div></div>`;});}).getSessionLogs(id);}
+function deleteLog(id,b){if(!confirm("Del?"))return;google.script.run.withSuccessHandler(r=>{if(r.success)b.parentElement.remove();}).deleteLog(id);}
+</script>
+</body>
+</html>
