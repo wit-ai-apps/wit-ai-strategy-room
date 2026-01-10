@@ -1,24 +1,25 @@
-<!--
-APP: AI Strategy Room (AI会議室)
-FILE: index.html
-VERSION: v16.2.1-failsafe-watchdog-01
-DATE(JST): 2026-01-04 15:20 JST
-TITLE: オート会話の完全停止防止（Watchdog 60秒）＋返り値正規化強化
-CHANGES:
-- runStepにWatchdog（60秒）を追加：成功/失敗/タイムアウトのどれでも必ず次へ進む
-- 遅延返答の二重描画を防止（doneガード）
-- オート会話開始時に「司会以外が0人」チェックを追加
-AUTHOR: Yui (Integration) / Based on Claude & Gemini proposals
-BUILD_PARAM: ?b=2026-01-04_1520_watchdog-01
-DEBUG_PARAM: &debug=1
--->
 
+<!--
+  APP: AI Strategy Room (AI会議室)
+  FILE: index.html
+  VERSION: v16.3.8-hf1-full
+  DATE(JST): 2026-01-10 00:14 JST
+  TITLE: CUT継続でcontextが増えない問題の修正（参照箱）＋二重追加防止の完全化＋detectCut誤検知低減＋インジケータ矛盾解消（UIそのまま）
+  CHANGES:
+  - 【最重要】CUT継続でもcontextが確実に増えるように修正（ctx.text参照箱→最後にglobal contextへ反映）
+  - 【最重要】二重追加防止を完全化（最初のresponseはrunStepで1回、続きは_handleCutContinuation_でcont分のみ追加）
+  - detectCutの誤検知を低減（「だ/よ/ね/わ/な」等をCUT候補から外し、短文×助詞止まり・接続形・省略記号中心に）
+  - インジケータの矛盾解消（Receivedをthinkingと独立に表示。設定ON/OFFは種類別に反映）
+  AUTHOR: Yui（Fix/Integration）
+  BUILD_PARAM: ?b=2026-01-10_0014_hf1-full
+  DEBUG_PARAM: &debug=1
+-->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Strategy Room v16.2.1-failsafe-watchdog-01</title>
+<title>AI Round Table v16.3.8-hf1-full</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -59,6 +60,8 @@ DEBUG_PARAM: &debug=1
   .btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
   .btn-primary { background: linear-gradient(135deg, #10b981, #059669); color: white; }
   .btn-primary:hover { filter: brightness(1.1); }
+  .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+  .btn-danger:hover { filter: brightness(1.1); }
   
   .title-input { width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.1rem; box-sizing: border-box; }
   textarea { width: 100%; height: 150px; padding: 16px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; resize: vertical; box-sizing: border-box; font-family: monospace; }
@@ -94,7 +97,7 @@ DEBUG_PARAM: &debug=1
     position: absolute;
     bottom: 60px;
     left: 0;
-    width: 800px; /* ★幅800pxに拡大 */
+    width: 400px; /* ★元の値に戻す（UI凍結） */
     max-width: 80vw;
     background: white;
     padding: 12px;
@@ -134,6 +137,7 @@ DEBUG_PARAM: &debug=1
   .manual-grid { display: none; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   @media (max-width: 1000px) { .manual-grid { grid-template-columns: repeat(2, 1fr); } }
   .mini-col { height: 500px; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+  .mini-head { padding: 10px 15px; font-weight: bold; border-bottom: 1px solid #eee; }
   .mini-body { overflow-y: auto; flex: 1; padding: 10px; }
   
   /* Utilities */
@@ -159,24 +163,10 @@ DEBUG_PARAM: &debug=1
 </style>
 </head>
 <body>
-<!--
- * VERSION: v15.1-chatloop-fix
- * BUILD: 2026-01-04_0059_chatloop-fix01
- * AUTHOR: Rex
- * TITLE: オート会話ループ修正版（UI構造固定）
- * CHANGES:
- * - startAuto: Promiseチェーンを「必ず次へ進む」構造に修正
- * - runStep: エラー時も自動応答を表示して次のステップへ進む
- * - targets空対策: オート開始時に参加者が2人未満ならアラート
- * - GAS返り値の正規化: typeof raw で分岐して常に .response を取得
- * - 見た目変更なし（HTML構造/CSS/文言/ボタン配置は完全維持）
- * DEBUG_PARAM: ?debug=1
- * BUILD_PARAM: ?b=2026-01-04_0059_chatloop-fix01
--->
 <div class="container" id="appContainer">
   <div class="header">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div class="app-title">AI Round Table <span class="app-meta">v16.2.1-failsafe-watchdog-01</span></div>
+      <div class="app-title">AI Round Table <span class="app-meta">v16.3.8-hf1-full</span></div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="font-ctrl-group">
@@ -186,6 +176,8 @@ DEBUG_PARAM: &debug=1
       </div>
       <button class="btn btn-secondary" onclick="openHistoryModal()">📂 ログ</button>
       <button class="btn btn-secondary" onclick="tryReset()">🔄 リセット</button>
+      <!-- ★追加：設定ボタン（例外許可：UI追加）★ -->
+      <button class="btn btn-secondary" onclick="openSettingsModal()">⚙ 設定</button>
     </div>
   </div>
 
@@ -253,7 +245,72 @@ DEBUG_PARAM: &debug=1
 
 <div id="historyModal" class="modal-overlay"><div class="modal-content"><div style="display:flex;justify-content:space-between;margin-bottom:15px;"><h2>📂 過去ログ</h2><button onclick="closeHistoryModal()" class="btn btn-secondary">✕</button></div><div id="logList" style="overflow-y:auto;flex:1;"></div></div></div>
 <div id="resetModal" class="modal-overlay"><div class="modal-content" style="max-width:400px;text-align:center;"><h3 style="margin-top:0;">🔄 リセットしますか？</h3><p style="color:#666;">画面の内容と一時保存データがクリアされます。<br>(過去ログは消えません)</p><div style="display:flex;justify-content:center;gap:10px;margin-top:20px;"><button class="btn btn-secondary" onclick="closeModal('resetModal')">キャンセル</button><button class="btn btn-danger" onclick="performReset()">実行する</button></div></div></div>
-<div id="codeModal" class="modal-overlay" style="z-index:3000;"><div class="modal-content code-modal-content"><div style="padding:15px;background:#2d2d2d;display:flex;justify-content:space-between;"><span style="font-weight:bold;color:#fff;">📜 ソースコード</span><div><button class="btn btn-primary" style="height:32px;font-size:0.8rem;" onclick="copyCode()">コピー</button> <button onclick="document.getElementById('codeModal').style.display='none'" class="btn btn-secondary" style="background:#444;color:#fff;border:none;">✕</button></div></div><div class="code-modal-body"><pre><code id="codeViewerContent"></code></pre></div></div></div>
+<div id="codeModal" class="modal-overlay" style="z-index:3000;"><div class="modal-content code-modal-content"><div style="padding:15px;background:#2d2d2d;display:flex;justify-content:space-between;"><span style="font-weight:bold;color:#fff;">📜 ソースコード</span><div><button class="btn btn-primary" style="height:32px;font-size:0.8rem;" onclick="copyCode()">コピー</button> <button onclick="closeModal('codeModal')" class="btn btn-secondary" style="background:#444;color:#fff;border:none;">✕</button></div></div><div class="code-modal-body"><pre><code id="codeViewerContent"></code></pre></div></div></div>
+
+<!-- ★追加：設定モーダル（例外許可：UI追加）★ -->
+<div id="settingsModal" class="modal-overlay"><div class="modal-content" style="max-width:600px;max-height:90vh;overflow-y:auto;">
+  <div style="display:flex;justify-content:space-between;margin-bottom:20px;align-items:center;">
+    <h2 style="margin:0;">⚙ 設定</h2>
+    <button onclick="closeSettingsModal()" class="btn btn-secondary">✕</button>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:20px;">
+    <!-- 要約レベル -->
+    <div>
+      <label style="font-weight:bold;display:block;margin-bottom:8px;">📊 要約レベル</label>
+      <select id="settingSummaryLevel" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;">
+        <option value="simple">簡単（結論→箇条書き3つ→次の1アクション）</option>
+        <option value="standard" selected>標準（結論→理由→手順）</option>
+        <option value="detailed">詳細（前提→判断→手順→注意点）</option>
+      </select>
+    </div>
+    <!-- 会話トーン -->
+    <div>
+      <label style="font-weight:bold;display:block;margin-bottom:8px;">💬 会話トーン</label>
+      <select id="settingConversationTone" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;">
+        <option value="first">初めて（丁寧め）</option>
+        <option value="friendly" selected>フレンドリー（柔らかめ）</option>
+        <option value="business">仕事（用件中心で短く）</option>
+      </select>
+    </div>
+    <!-- 丁寧すぎ抑制 -->
+    <div>
+      <label style="font-weight:bold;display:block;margin-bottom:8px;cursor:pointer;">
+        <input type="checkbox" id="settingPoliteSuppress" style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
+        丁寧すぎ抑制（前置き・挨拶を削る）
+      </label>
+    </div>
+    <!-- インジケータ表示 -->
+    <div>
+      <label style="font-weight:bold;display:block;margin-bottom:8px;">📊 インジケータ表示</label>
+      <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:#f8fafc;border-radius:8px;">
+        <label style="cursor:pointer;display:flex;align-items:center;">
+          <input type="checkbox" id="indicatorThinking" checked style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
+          Thinking（思考中）
+        </label>
+        <label style="cursor:pointer;display:flex;align-items:center;">
+          <input type="checkbox" id="indicatorTimeout" checked style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
+          Timeout（タイムアウト）
+        </label>
+        <label style="cursor:pointer;display:flex;align-items:center;">
+          <input type="checkbox" id="indicatorCut" checked style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
+          CUT（会話が途中で切れた）
+        </label>
+        <label style="cursor:pointer;display:flex;align-items:center;">
+          <input type="checkbox" id="indicatorLate" checked style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
+          Late（遅延レスポンス取得）
+        </label>
+        <label style="cursor:pointer;display:flex;align-items:center;">
+          <input type="checkbox" id="indicatorError" checked style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
+          Error（エラー）
+        </label>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:center;gap:10px;margin-top:25px;">
+    <button class="btn btn-secondary" onclick="closeSettingsModal()">キャンセル</button>
+    <button class="btn btn-primary" onclick="saveSettingsAndClose()">保存</button>
+  </div>
+</div></div>
 
 <script>
 const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
@@ -262,14 +319,153 @@ let currentMode = null;
 let imagesBase64 = []; let context = ""; let sessionId = "SESS_"+Date.now();
 let codeSnippets = [];
 let assignedRoles = {};
-const STORAGE_KEY = 'ai_round_v15_1_fix';
+const STORAGE_KEY = 'ai_round_v16_3_3';
+const SETTINGS_STORAGE_KEY = 'ai_round_settings_v16_3_7';
 
-window.onload = () => { updateClock(); setInterval(updateClock,60000); initUI(); };
+// ★設定値（localStorageから復元）★
+let settings = {
+  summaryLevel: 'standard',
+  conversationTone: 'friendly',
+  politeSuppress: false,
+  indicators: {
+    thinking: true,
+    timeout: true,
+    cut: true,
+    late: true,
+    error: true
+  }
+};
+
+function loadSettings() {
+  try {
+    const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      settings = { ...settings, ...parsed, indicators: { ...settings.indicators, ...(parsed.indicators || {}) } };
+    }
+  } catch (e) {
+    console.warn('Settings load failed:', e);
+  }
+}
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.warn('Settings save failed:', e);
+  }
+}
+
+/* =========================================================
+   v16.3.8-hf1-full FIX 1: detectCut（誤検知低減）
+========================================================= */
+function _detectCut_(text) {
+  if (!text || typeof text !== 'string') return false;
+
+  let clean = text
+    .replace(/<[^>]+>/g, '')
+    .replace(/[＊*`_~\[\](){}#]/g, '')
+    .trim();
+  if (!clean) return false;
+
+  const lines = clean.split(/\n/).map(s => s.trim()).filter(Boolean);
+  if (!lines.length) return false;
+
+  const last = lines[lines.length - 1];
+  if (!last || last.length < 3) return false;
+
+  if (/[。！？!?\.]$/.test(last)) return false;
+  if (/[\.．…]{2,}$/.test(last)) return true;
+
+  const short = last.length <= 28;
+
+  if (short && /(の|が|を|に|で|と|は|も|か|や|へ)$/.test(last)) return true;
+  if (short && /(て|ので|のに|けど|けれど|から|ため|つつ)$/.test(last)) return true;
+  if (short && /(よう|そう|らしい|たい|ない)$/.test(last)) return true;
+
+  return false;
+}
+
+/* =========================================================
+   既存：表示名の正規化
+========================================================= */
+function normalizeDisplayName(speaker, role) {
+  const roleToModelMap = {
+    'ImageAnalyzer': 'Gemini',
+    'FactChecker': 'Gemini',
+    'CodeReviewer': 'Rex',
+    'TechAdvisor': 'Rex',
+    'Proposer': 'Gemini',
+    'Opposer': 'Gemini',
+    'Observer': 'Gemini',
+    'yui': 'Yui',
+    'gemini': 'Gemini',
+    'rex': 'Rex',
+    'deepseek': 'DeepSeek',
+    'llama': 'Llama',
+    'qwen': 'Qwen',
+    'mistral': 'Mistral',
+    'dolphin': 'Dolphin'
+  };
+  const lowerSpeaker = String(speaker || '').toLowerCase();
+  if (roleToModelMap[lowerSpeaker]) return roleToModelMap[lowerSpeaker];
+
+  const roleKey = String(role || speaker || '').replace(/[^a-zA-Z0-9]/g, '');
+  if (roleToModelMap[roleKey]) return roleToModelMap[roleKey];
+
+  return String(speaker || 'AI').charAt(0).toUpperCase() + String(speaker || 'AI').slice(1);
+}
+
+/* =========================================================
+   既存：Markdownフォーマット
+========================================================= */
+function formatMarkdown(text) {
+  if (!text) return '';
+  let formatted = text;
+
+  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, l, c) => {
+    const i = codeSnippets.length; 
+    codeSnippets.push({ l: l||'text', c: c.trim() });
+    return `__CODE_${i}__`;
+  });
+
+  formatted = formatted.replace(/\n/g, '<br>');
+  formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+  formatted = formatted.replace(/__CODE_(\d+)__/g, (m, i) => {
+    if (codeSnippets[i]) {
+      return `<button class="code-link-btn" onclick="openCode(${i})">📜 コード (${codeSnippets[i].l})</button>`;
+    }
+    return '';
+  });
+
+  return formatted;
+}
+
+/* =========================================================
+   モーダル共通
+========================================================= */
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'flex';
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
+window.onload = () => { 
+  updateClock(); 
+  setInterval(updateClock,60000); 
+  loadSettings();
+  initUI(); 
+  applySettingsToUI();
+};
 
 function initUI() {
   const con = document.getElementById('agentBadges');
   const mcSel = document.getElementById('mcSelect');
   mcSel.innerHTML = ""; con.innerHTML = "";
+  
   AGENTS.forEach(a => {
     const span = document.createElement('span');
     span.className = `agent-badge ${selected.includes(a)?'selected':''}`;
@@ -277,13 +473,23 @@ function initUI() {
     span.innerText = a.charAt(0).toUpperCase() + a.slice(1);
     span.onclick = () => toggleAgent(a);
     con.appendChild(span);
+
     const opt = document.createElement('option');
     opt.value = a; opt.innerText = a.charAt(0).toUpperCase() + a.slice(1);
     mcSel.appendChild(opt);
   });
+  
+  mcSel.addEventListener('change', function() {
+    const newMc = this.value;
+    selected = selected.filter(a => a !== newMc);
+    _updateBadgeStates_();
+  });
+  
+  _updateBadgeStates_();
 }
 
 function updateClock(){document.getElementById('clock').innerText=new Date().toLocaleString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
+
 function setFontSize(s) {
   const r = document.body; document.querySelectorAll('.font-btn').forEach(b=>b.classList.remove('active'));
   if(s==='small'){r.style.fontSize='14px'; document.querySelectorAll('.font-btn')[0].classList.add('active');}
@@ -304,11 +510,27 @@ function setMode(mode) {
 }
 
 function toggleAgent(a) {
+  const currentMc = document.getElementById('mcSelect')?.value;
+  if (a === currentMc) return;
+
   if(selected.includes(a)) { if(selected.length > 1) selected = selected.filter(x => x!==a); }
   else selected.push(a);
+
+  _updateBadgeStates_();
+}
+
+function _updateBadgeStates_() {
+  const currentMc = document.getElementById('mcSelect')?.value;
   AGENTS.forEach(ag => {
     const el = document.getElementById(`badge-${ag}`);
-    if(selected.includes(ag)) el.classList.add('selected'); else el.classList.remove('selected');
+    if (!el) return;
+    if (ag === currentMc) {
+      selected = selected.filter(x => x !== ag);
+      el.classList.remove('selected');
+    } else {
+      if(selected.includes(ag)) el.classList.add('selected'); 
+      else el.classList.remove('selected');
+    }
   });
 }
 
@@ -319,9 +541,8 @@ function insertTemplate() {
 }
 
 function resetInput() { document.getElementById('themeInput').value = ''; imagesBase64 = []; document.getElementById('previewArea').innerHTML = ''; }
-function tryReset() { document.getElementById('resetModal').style.display='flex'; }
+function tryReset() { openModal('resetModal'); }
 function performReset() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
-function closeModal(id) { document.getElementById(id).style.display='none'; }
 
 function buildProgressBar(totalSteps) {
   const bar = document.getElementById('progressBarInner');
@@ -344,15 +565,7 @@ function startProcess() {
   if(currentMode === 'auto') startAuto(theme); else startManual(theme);
 }
 
-/**
- * ★★★ オート会議開始（修正版）★★★
- * 
- * 【修正ポイント】
- * 1. targets空対策: 参加者が2人未満ならアラート
- * 2. Promiseチェーンを「必ず次へ進む」構造に修正
- * 3. エラー時も自動応答を表示して次のステップへ進む
- */
-function startAuto(theme) {
+async function startAuto(theme) {
   document.getElementById('mainStage').style.display = 'block';
   document.getElementById('progressZone').style.display = 'block';
   document.getElementById('timeline').innerHTML = '';
@@ -360,211 +573,566 @@ function startAuto(theme) {
   const mc = document.getElementById('mcSelect').value;
   const rounds = parseInt(document.getElementById('roundSelect').value, 10);
   
-  // ★★ targets空対策: 参加者が2人未満ならアラート ★★
-  let members = selected.filter(a => a !== mc);
-  if (members.length < 1) {
-    alert('⚠ エラー: 司会以外の参加者が1人以上必要です。\n参加AIを選択してください。');
-    document.getElementById('statusText').innerText = "❌ エラー: 参加者不足";
-    document.getElementById('statusText').style.color = 'red';
+  let targets = selected.length > 0 ? selected.filter(a => a !== mc) : AGENTS.filter(a => a !== mc);
+  
+  if (targets.length < 2) {
+    alert('オート会議は2人以上のAIが必要です。');
+    document.getElementById('statusText').innerText = "❌ エラー: AIが不足";
     return;
   }
   
-  const totalSteps = 2 + (members.length * rounds);
-  buildProgressBar(totalSteps);
-
-  google.script.run.withSuccessHandler(roles => {
+  try {
+    const participants = (selected.length > 0 ? selected : AGENTS).filter(a => a !== mc);
+    const roles = await new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .getRoleAssignment(participants, mc);
+    });
+    
     assignedRoles = roles;
     context = `[User]: ${theme}\n`;
     const title = document.getElementById('topicTitle').value;
     const imgs = [...imagesBase64];
     let stepCount = 1;
 
-    // ★★ Promiseチェーンを「必ず次へ進む」構造に修正 ★★
-    // async関数でループを回す（エラーでも必ず次へ進む）
-    (async function runAutoLoop() {
-      try {
-        // MC開始
-        await runStep(mc, `ユーザー議題:「${theme}」\n司会として議論を開始し、役割（提案者・反論者）を指名して議論を始めてください。`, imgs, title, stepCount++, 'mc');
+    const mcInstr = _applySettingsToInstruction_(`ユーザー議題:「${theme}」\n司会として議論を開始し、役割（提案者・反論者）を指名して議論を始めてください。`);
+    await runStep(mc, mcInstr, imgs, title, stepCount++, 'mc');
 
-        // ラウンドループ
-        for (let r=1; r<=rounds; r++) {
-          let prefix = (rounds > 1) ? `【ラウンド ${r}/${rounds}】` : "";
-          
-          // 提案者ターン
-          const proposers = members.filter(a => assignedRoles[a] === 'proposer');
-          for (const agent of proposers) {
-            await runStep(agent, `${prefix}提案者として、具体的かつ論理的な解決策を提示してください。`, [], title, stepCount++, 'proposer');
-          }
-          
-          // その他の役割ターン
-          const others = members.filter(a => assignedRoles[a] !== 'proposer');
-          for (const agent of others) {
-            let role = assignedRoles[agent];
-            let msg = `${prefix}提案に対して意見してください。`;
-            if(role === 'opposer') msg = `${prefix}反論者として、提案のリスクや欠陥を厳しく指摘してください。`;
-            if(role === 'tech') msg = `${prefix}技術顧問として、コードや実装の実現可能性を検証してください。`;
-            await runStep(agent, msg, [], title, stepCount++, role);
-          }
-        }
-
-        // MC総括
-        const finalInst = `議論を総括し、提案・反論・技術検証を統合して、最終的な【完全な解決策/コード】を作成してください。`;
-        await runStep(mc, finalInst, [], title, stepCount, 'mc');
-        
-        // 完了
-        document.getElementById('statusText').innerText = "✅ 完了";
-        document.getElementById('statusText').style.color = '#10b981';
-        saveStorage();
-        
-      } catch (e) {
-        // ★最終的なエラーでも、ここまでの結果は表示済み
-        console.error('Auto loop fatal error:', e);
-        document.getElementById('statusText').innerText = "⚠ 一部エラー（結果は表示済み）";
-        document.getElementById('statusText').style.color = '#f59e0b';
+    for (let r = 1; r <= rounds; r++) {
+      let prefix = (rounds > 1) ? `【ラウンド ${r}/${rounds}】` : "";
+      const proposers = targets.filter(a => assignedRoles[a] === 'proposer');
+      for (const agent of proposers) {
+        const proposerInstr = _applySettingsToInstruction_(`${prefix}提案者として、具体的かつ論理的な解決策を提示してください。`);
+        await runStep(agent, proposerInstr, imgs, title, stepCount++, 'proposer');
       }
-    })();
+      const others = targets.filter(a => assignedRoles[a] !== 'proposer');
+      for (const agent of others) {
+        let role = assignedRoles[agent];
+        let msg = `${prefix}提案に対して意見してください。`;
+        if(role === 'opposer') msg = `${prefix}反論者として、提案のリスクや欠陥を厳しく指摘してください。`;
+        if(role === 'tech') msg = `${prefix}技術顧問として、コードや実装の実現可能性を検証してください。`;
+        const agentInstr = _applySettingsToInstruction_(msg);
+        await runStep(agent, agentInstr, imgs, title, stepCount++, role);
+      }
+    }
+
+    const finalInstBase = `議論を総括し、提案・反論・技術検証を統合して、最終的な【完全な解決策/コード】を作成してください。`;
+    const finalInst = _applySettingsToInstruction_(finalInstBase);
+    await runStep(mc, finalInst, imgs, title, stepCount, 'mc');
     
-  }).getRoleAssignment(selected, mc);
+    document.getElementById('statusText').innerText = "✅ 完了";
+    saveStorage();
+  } catch (e) {
+    document.getElementById('statusText').innerText = "❌ エラー: " + (e.message || e);
+    document.getElementById('statusText').style.color = 'red';
+    console.error("startAuto error:", e);
+  }
 }
 
-/**
- * ★★★ 1ステップ実行（修正版）★★★
- * 
- * 【修正ポイント】
- * 1. エラー時も必ず resolve して次へ進む（reject しない）
- * 2. GAS返り値の正規化: typeof で分岐して常に .response を取得
- * 3. 自動応答をタイムライン表示
- */
+/* =========================================================
+   v16.3.8-hf1-full FIX 2: CUT継続（ctx.text参照箱）＋二重追加根絶
+========================================================= */
+function _handleCutContinuation_(
+  speaker, responseText, ctx, imgs, sessionId, title, role,
+  id, indicatorId, attemptCount, resolve
+) {
+  const MAX_CUT_ATTEMPTS = 2;
+
+  const ansEl = document.getElementById(`ans-${id}`);
+  const indicatorEl = document.getElementById(indicatorId);
+
+  const setIndicator = (txt) => {
+    if (!indicatorEl) return;
+    if (!settings?.indicators?.cut) return;
+    indicatorEl.textContent = txt;
+  };
+
+  if (attemptCount >= MAX_CUT_ATTEMPTS) {
+    const cutEndMsg = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUTのまま終了（次へ）</span>`;
+    if (ansEl) ansEl.innerHTML = formatMarkdown(responseText + cutEndMsg);
+    setIndicator('✂ CUT → End');
+    resolve();
+    return;
+  }
+
+  const attemptNum = attemptCount + 1;
+
+  const cutIndicator = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています。続きを要求します... (#${attemptNum})</span>`;
+  if (ansEl) ansEl.innerHTML = formatMarkdown(responseText + cutIndicator);
+  setIndicator(`✂ CUT → Continue #${attemptNum}`);
+
+  google.script.run.withSuccessHandler((contRaw) => {
+    let contNormalized;
+    if (typeof contRaw === "string") {
+      try { contNormalized = JSON.parse(contRaw); }
+      catch (e) { contNormalized = { status: "success", response: contRaw }; }
+    } else if (typeof contRaw === "object" && contRaw !== null) {
+      contNormalized = contRaw;
+    } else {
+      contNormalized = { status: "success", response: String(contRaw || "(無応答)") };
+    }
+
+    const contText = contNormalized.response || contNormalized.text || contNormalized.message || String(contNormalized || "(無応答)");
+    const combinedText = responseText + '\n\n**（続き #' + attemptNum + '）**\n' + contText;
+
+    const isStillCut = _detectCut_(contText);
+
+    if (isStillCut && attemptCount < (MAX_CUT_ATTEMPTS - 1)) {
+      _handleCutContinuation_(speaker, combinedText, ctx, imgs, sessionId, title, role, id, indicatorId, attemptCount + 1, resolve);
+      return;
+    }
+
+    if (ansEl) ansEl.innerHTML = formatMarkdown(combinedText);
+
+    if (isStillCut) {
+      setIndicator('✂ CUT → End');
+    } else {
+      // Receivedはthinkingと独立（矛盾解消）
+      if (indicatorEl) indicatorEl.textContent = '✓ Received';
+    }
+
+    // ★続き分だけctxへ追加（最初のresponseTextはrunStepで既に追加済み）
+    ctx.text += `[${speaker}]: ${contText}\n`;
+    resolve();
+  }).withFailureHandler(() => {
+    const failMsg = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています（続き要求失敗）</span>`;
+    if (ansEl) ansEl.innerHTML = formatMarkdown(responseText + failMsg);
+    setIndicator('✂ CUT → Failed');
+    // 失敗時はctxに追記しない（二重や矛盾を避ける）
+    resolve();
+  }).runConferenceTurn(
+    speaker,
+    ctx.text,
+    "前の回答が途中で切れています。続きを完成させてください。",
+    imgs,
+    sessionId,
+    title,
+    role
+  );
+}
+
+/* =========================================================
+   v16.3.8-hf1-full FIX 3: runStep（context参照箱→必ずglobal反映）
+========================================================= */
 function runStep(speaker, instr, imgs, title, step, role){
-  return new Promise((resolve, reject)=>{
+  return new Promise((resolve)=>{
     updateStep(step);
     const tl = document.getElementById('timeline');
     const id = Date.now();
+
     let roleBadge = ""; let roleClass = "";
     if(role === 'proposer') { roleBadge='<span class="role-badge" style="background:var(--role-proposer);">提案</span>'; roleClass='role-proposer'; }
     if(role === 'opposer') { roleBadge='<span class="role-badge" style="background:var(--role-opposer);">反論</span>'; roleClass='role-opposer'; }
     if(role === 'tech') { roleBadge='<span class="role-badge" style="background:var(--role-tech);">技術</span>'; roleClass='role-tech'; }
 
-    tl.insertAdjacentHTML('beforeend', `<div class="timeline-card ${roleClass}"><div class="tl-header h-${speaker}"><span>${speaker.toUpperCase()} ${roleBadge}</span><span>Thinking...</span></div><div class="tl-body" id="ans-${id}"><div class="loader">...</div></div></div>`);
+    const displayName = normalizeDisplayName(speaker, role);
+    const indicatorId = `indicator-${id}`;
+
+    const indicatorText = settings?.indicators?.thinking ? 'Thinking...' : '';
+    tl.insertAdjacentHTML('beforeend',
+      `<div class="timeline-card ${roleClass}">
+        <div class="tl-header h-${speaker}">
+          <span>${displayName} ${roleBadge}</span>
+          <span id="${indicatorId}">${indicatorText}</span>
+        </div>
+        <div class="tl-body" id="ans-${id}"><div class="loader">...</div></div>
+      </div>`
+    );
     window.scrollTo(0, document.body.scrollHeight);
 
-    // Watchdog: サーバー応答が返らず沈黙しても、必ず次へ進む
+    // ★参照箱（これに追記 → 最後にglobal contextへ戻す）
+    const ctx = { text: (typeof context === 'string' ? context : String(context || "")) };
+
+    const ansEl = document.getElementById(`ans-${id}`);
+    const indicatorEl = document.getElementById(indicatorId);
+
+    const setIndicator = (txt, kind) => {
+      if (!indicatorEl) return;
+
+      if (kind === 'timeout' && !settings?.indicators?.timeout) return;
+      if (kind === 'late'    && !settings?.indicators?.late)    return;
+      if (kind === 'error'   && !settings?.indicators?.error)   return;
+      if (kind === 'cut'     && !settings?.indicators?.cut)     return;
+
+      // Receivedはthinkingと独立（矛盾解消）
+      if (kind === 'received') {
+        indicatorEl.textContent = txt;
+        return;
+      }
+
+      indicatorEl.textContent = txt;
+    };
+
+    const finalize = () => {
+      context = ctx.text;
+      resolve();
+    };
+
     const WATCHDOG_MS = 60000;
     let done = false;
+    let retryCount = 0;
+    const MAX_RETRY = 10;
+    let retryTimer = null;
+
     const timer = setTimeout(() => {
       if (done) return;
       done = true;
+
       const msg = `(⏱ タイムアウト: ${WATCHDOG_MS/1000}秒 応答なし → 次へ進みます)`;
-      const ansEl = document.getElementById(`ans-${id}`);
       if (ansEl) ansEl.innerHTML = `<span style="color:#b45309; font-weight:bold;">${msg}</span>`;
-      context += `[${speaker}]: ${msg}\n`;
-      resolve();
+      setIndicator('⏱ Timeout (move on)', 'timeout');
+
+      ctx.text += `[${speaker}]: ${msg}\n`;
+      finalize();
+
+      retryTimer = setInterval(() => {
+        if (retryCount >= MAX_RETRY) {
+          if (retryTimer) clearInterval(retryTimer);
+          return;
+        }
+        retryCount++;
+
+        google.script.run.withSuccessHandler((logs) => {
+          if (!Array.isArray(logs) || logs.length === 0) return;
+
+          const lastLog = logs[logs.length - 1];
+          if (lastLog && lastLog.speaker === speaker && lastLog.content) {
+            const already = (ansEl && ansEl.innerHTML && ansEl.innerHTML.includes(lastLog.content));
+            if (ansEl && !already) {
+              ansEl.innerHTML = `<span style="color:#10b981; font-weight:bold;">(遅延レスポンス取得)</span><br>` + formatMarkdown(lastLog.content);
+              setIndicator('↻ Late response fetched', 'late');
+
+              ctx.text += `[${speaker}]: ${lastLog.content}\n`;
+              context = ctx.text;
+
+              if (retryTimer) clearInterval(retryTimer);
+            }
+          }
+        }).getSessionLogs(sessionId);
+      }, 30000);
+
     }, WATCHDOG_MS);
 
-    
-    // ★★ GAS呼び出し（返り値を正規化） ★★
-    google.script.run
-      .withSuccessHandler(raw => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        // ★返り値の正規化: typeof で分岐
-        let responseText = "";
-        if (typeof raw === "string") {
-          // 文字列で返ってきた場合
-          try {
-            const parsed = JSON.parse(raw);
-            responseText = parsed.response || parsed.text || parsed.message || raw;
-          } catch (e) {
-            // JSONパース失敗 → そのまま文字列として扱う
-            responseText = raw;
-          }
-        } else if (typeof raw === "object" && raw !== null) {
-          // オブジェクトで返ってきた場合
-          responseText = raw.response || raw.text || raw.message || JSON.stringify(raw);
-        } else {
-          // その他（null/undefined等）
-          responseText = "(空の応答)";
-        }
-        
-        // タイムライン表示
-        document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(responseText);
-        context += `[${speaker}]: ${responseText}\n`;
-        
-        // ★必ず resolve（次へ進む）
-        resolve();
-      })
-      .withFailureHandler(e => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        // ★通信エラー時も自動応答を表示して次へ進む
-        console.error('GAS call failed:', e);
-        const fallbackText = `**${speaker}**（${role || "observer"}）です。\n\n(※通信エラーのため自動応答)\nエラー詳細: ${e.message || e}`;
-        document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(fallbackText);
-        context += `[${speaker}]: ${fallbackText}\n`;
-        
-        // ★必ず resolve（エラーでも次へ進む）
-        resolve();
-      })
-      .runConferenceTurn(speaker, context, instr, imgs, sessionId, title, role);
+    google.script.run.withSuccessHandler(raw => {
+      if (done) {
+        if (retryTimer) clearInterval(retryTimer);
+        return;
+      }
+      done = true;
+      clearTimeout(timer);
+      if (retryTimer) clearInterval(retryTimer);
+
+      let normalized = null;
+      if (typeof raw === "string") {
+        try { normalized = JSON.parse(raw); }
+        catch (e) { normalized = { status: "success", response: raw }; }
+      } else if (typeof raw === "object" && raw !== null) {
+        normalized = raw;
+      } else {
+        normalized = { status: "success", response: String(raw || "(無応答)") };
+      }
+
+      const responseText = normalized.response || normalized.text || normalized.message || String(normalized || "(無応答)");
+
+      // Receivedはthinkingと独立
+      setIndicator('✓ Received', 'received');
+
+      // ★最初の応答はここで1回だけctxに追加（ここが二重追加防止の核）
+      ctx.text += `[${speaker}]: ${responseText}\n`;
+
+      const isCut = _detectCut_(responseText);
+      const autoContinueEnabled = true;
+
+      if (ansEl) ansEl.innerHTML = formatMarkdown(responseText);
+
+      if (isCut && autoContinueEnabled) {
+        _handleCutContinuation_(speaker, responseText, ctx, imgs, sessionId, title, role, id, indicatorId, 0, () => {
+          finalize();
+        });
+        return;
+      }
+
+      finalize();
+    }).withFailureHandler(err => {
+      if (done) {
+        if (retryTimer) clearInterval(retryTimer);
+        return;
+      }
+      done = true;
+      clearTimeout(timer);
+      if (retryTimer) clearInterval(retryTimer);
+
+      const errorText = `(システムエラー)\n${err?.message || err}`;
+      if (ansEl) ansEl.innerHTML = `<span style="color:red;">${formatMarkdown(errorText)}</span>`;
+      setIndicator('⚠ Error', 'error');
+
+      ctx.text += `[${speaker}]: ${errorText}\n`;
+      finalize();
+    }).runConferenceTurn(speaker, ctx.text, instr, imgs, sessionId, title, role);
   });
 }
 
 function startManual(theme) {
   const grid = document.getElementById('manualGrid');
   grid.style.display = 'grid'; grid.innerHTML = "";
-  const cols = Math.min(selected.length, 4);
+  
+  const mc = document.getElementById('mcSelect').value;
+  const targets = (selected.length > 0 ? selected : AGENTS).filter(a => a !== mc);
+  
+  const cols = Math.min(targets.length, 4);
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  selected.forEach(a => {
+  targets.forEach(a => {
     const div = document.createElement('div'); div.className = 'mini-col';
     const id = `hist-${a}-${Date.now()}`;
-    div.innerHTML = `<div class="mini-head h-${a}">${a.toUpperCase()}</div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
+    const displayName = normalizeDisplayName(a, null);
+    div.innerHTML = `<div class="mini-head h-${a}">${displayName}</div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
     grid.appendChild(div);
-    google.script.run.withSuccessHandler(r => {
-      document.getElementById(id).innerHTML = formatMarkdown(r.response); saveStorage();
+    google.script.run.withSuccessHandler(raw => {
+      let normalized = null;
+      if (typeof raw === "string") {
+        try { normalized = JSON.parse(raw); } catch (e) { normalized = { status: "success", response: raw }; }
+      } else if (typeof raw === "object" && raw !== null) {
+        normalized = raw;
+      } else {
+        normalized = { status: "success", response: String(raw || "(無応答)") };
+      }
+      const responseText = normalized.response || normalized.text || normalized.message || String(normalized || "(無応答)");
+      document.getElementById(id).innerHTML = formatMarkdown(responseText);
+      saveStorage();
     }).runConferenceTurn(a, theme, theme, imagesBase64, sessionId, "", null);
   });
   document.getElementById('statusText').innerText = "✅ 完了";
 }
 
-function formatMarkdown(text) {
-  let formatted = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, l, c) => {
-    const i = codeSnippets.length; codeSnippets.push({ l: l||'text', c: c.trim() });
-    return `__CODE_${i}__`;
-  });
-  formatted = formatted.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  return formatted.replace(/__CODE_(\d+)__/g, (m, i) => `<button class="code-link-btn" onclick="openCode(${i})">📜 コード (${codeSnippets[i].l})</button>`);
-}
 function openCode(i) {
   const s = codeSnippets[i]; const el = document.getElementById('codeViewerContent');
-  el.textContent = s.c; el.className = `language-${s.l}`; hljs.highlightElement(el);
-  document.getElementById('codeModal').style.display = 'flex';
+  el.textContent = s.c; el.className = `language-${s.l}`; 
+  if (typeof hljs !== 'undefined' && hljs) hljs.highlightElement(el);
+  openModal('codeModal');
 }
-function copyCode() { navigator.clipboard.writeText(document.getElementById('codeViewerContent').textContent).then(()=>alert("コピーしました")); }
-function uploadCode(){const c=document.getElementById('themeInput').value;if(c)google.script.run.withSuccessHandler(alert).uploadToGithub(prompt("File?","Code.gs"),c);}
+function copyCode() { 
+  const el = document.getElementById('codeViewerContent');
+  if (el) navigator.clipboard.writeText(el.textContent).then(()=>alert("コピーしました")); 
+}
+function uploadCode(){
+  const c = document.getElementById('themeInput').value;
+  if(c) google.script.run.withSuccessHandler(alert).uploadToGithub(prompt("File?","Code.gs"),c);
+}
 
 // Image Handling
 async function handleFileSelect(e){
-  const f=Array.from(e.target.files);
+  const f = Array.from(e.target.files);
   for(const x of f){
-    const c=await compress(x);
-    imagesBase64.push(c);
-    const wrapper = document.createElement('div');
-    wrapper.className = 'preview-wrapper';
-    wrapper.innerHTML = `<img src="${c}" class="preview-thumb"><div class="preview-popup"><img src="${c}"></div>`;
-    document.getElementById('previewArea').appendChild(wrapper);
+    const c = await compress(x);
+    if (c) {
+      imagesBase64.push(c);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'preview-wrapper';
+      wrapper.innerHTML = `<img src="${c}" class="preview-thumb"><div class="preview-popup"><img src="${c}"></div>`;
+      document.getElementById('previewArea').appendChild(wrapper);
+    }
   }
 }
-function compress(b){return new Promise(r=>{const f=new FileReader();f.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let w=i.width,h=i.height;if(w>1000||h>1000){const s=Math.min(1000/w,1000/h);w*=s;h*=s;}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);r(c.toDataURL('image/jpeg',0.7));};i.src=e.target.result;};f.readAsDataURL(b);});}
-async function pasteFromClipboard(){const i=await navigator.clipboard.read();for(const x of i){const t=x.types.find(a=>a.startsWith('image/'));if(t){const b=await x.getType(t);const c=await compress(b);imagesBase64.push(c);const w=document.createElement('div');w.className='preview-wrapper';w.innerHTML=`<img src="${c}" class="preview-thumb"><div class="preview-popup"><img src="${c}"></div>`;document.getElementById('previewArea').appendChild(w);}}}
+function compress(b){
+  return new Promise(r=>{
+    const f = new FileReader();
+    f.onload = e => {
+      const i = new Image();
+      i.onload = () => {
+        const c = document.createElement('canvas');
+        let w = i.width, h = i.height;
+        if(w > 1000 || h > 1000) {
+          const s = Math.min(1000/w, 1000/h);
+          w *= s; h *= s;
+        }
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(i, 0, 0, w, h);
+        r(c.toDataURL('image/jpeg', 0.7));
+      };
+      i.src = e.target.result;
+    };
+    f.readAsDataURL(b);
+  });
+}
+async function pasteFromClipboard(){
+  try {
+    const i = await navigator.clipboard.read();
+    for(const x of i){
+      const t = x.types.find(a => a.startsWith('image/'));
+      if(t){
+        const b = await x.getType(t);
+        const c = await compress(b);
+        if (c) {
+          imagesBase64.push(c);
+          const w = document.createElement('div');
+          w.className = 'preview-wrapper';
+          w.innerHTML = `<img src="${c}" class="preview-thumb"><div class="preview-popup"><img src="${c}"></div>`;
+          document.getElementById('previewArea').appendChild(w);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Clipboard read failed:', e);
+  }
+}
 
-function saveStorage(){localStorage.setItem(STORAGE_KEY, document.getElementById('mainStage').innerHTML);} 
-// Log functions
-function openHistoryModal(){document.getElementById('historyModal').style.display='flex';google.script.run.withSuccessHandler(l=>{document.getElementById('logList').innerHTML=l.map(x=>`<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${x.time} ${x.title||'(無題)'}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`).join('');}).getLogList();}
-function closeHistoryModal(){document.getElementById('historyModal').style.display='none';}
-function loadLog(id){if(!confirm("Load?"))return;closeHistoryModal();google.script.run.withSuccessHandler(ls=>{setMode('manual');const g=document.getElementById('manualGrid');g.style.display='grid';g.innerHTML="";g.style.gridTemplateColumns='1fr';ls.forEach(l=>{g.innerHTML+=`<div class="mini-col"><div class="mini-head" style="background:#eee;">${l.speaker}</div><div class="mini-body">${formatMarkdown(l.content)}</div></div>`;});}).getSessionLogs(id);}
-function deleteLog(id,b){if(!confirm("Del?"))return;google.script.run.withSuccessHandler(r=>{if(r.success)b.parentElement.remove();}).deleteLog(id);}
+function saveStorage(){
+  try {
+    localStorage.setItem(STORAGE_KEY, document.getElementById('mainStage').innerHTML);
+  } catch (e) {
+    console.warn('saveStorage failed:', e);
+  }
+}
+
+function openHistoryModal(){
+  openModal('historyModal');
+  google.script.run.withSuccessHandler(l=>{
+    let list = l;
+    if (typeof l === "string") {
+      try { list = JSON.parse(l); } catch (e) { list = []; }
+    }
+    if (!Array.isArray(list)) list = [];
+    
+    if (!list.length) {
+      document.getElementById('logList').innerHTML = "<div style='padding:20px;text-align:center;color:#64748b;'>保存済みログがありません。</div>";
+      return;
+    }
+    
+    document.getElementById('logList').innerHTML = list.map(x=>`<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${x.time || ''} ${x.title||'(無題)'}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`).join('');
+  }).withFailureHandler(err=>{
+    document.getElementById('logList').innerHTML = `<div style='padding:20px;text-align:center;color:#ef4444;'>履歴の読み込みに失敗: ${err?.message || err}</div>`;
+  }).getLogList();
+}
+function closeHistoryModal(){ closeModal('historyModal'); }
+
+// 設定モーダル
+function openSettingsModal() { applySettingsToUI(); openModal('settingsModal'); }
+function closeSettingsModal() { closeModal('settingsModal'); }
+
+function applySettingsToUI() {
+  document.getElementById('settingSummaryLevel').value = settings.summaryLevel;
+  document.getElementById('settingConversationTone').value = settings.conversationTone;
+  document.getElementById('settingPoliteSuppress').checked = settings.politeSuppress;
+  document.getElementById('indicatorThinking').checked = settings.indicators.thinking;
+  document.getElementById('indicatorTimeout').checked = settings.indicators.timeout;
+  document.getElementById('indicatorCut').checked = settings.indicators.cut;
+  document.getElementById('indicatorLate').checked = settings.indicators.late;
+  document.getElementById('indicatorError').checked = settings.indicators.error;
+}
+
+function saveSettingsAndClose() {
+  settings.summaryLevel = document.getElementById('settingSummaryLevel').value;
+  settings.conversationTone = document.getElementById('settingConversationTone').value;
+  settings.politeSuppress = document.getElementById('settingPoliteSuppress').checked;
+  settings.indicators.thinking = document.getElementById('indicatorThinking').checked;
+  settings.indicators.timeout = document.getElementById('indicatorTimeout').checked;
+  settings.indicators.cut = document.getElementById('indicatorCut').checked;
+  settings.indicators.late = document.getElementById('indicatorLate').checked;
+  settings.indicators.error = document.getElementById('indicatorError').checked;
+  saveSettings();
+  closeSettingsModal();
+}
+
+function _applySettingsToInstruction_(baseInstr) {
+  let tags = [];
+  if (settings.summaryLevel === 'simple') tags.push('[要約:簡単] 結論→箇条書き3つ→次の1アクション');
+  else if (settings.summaryLevel === 'standard') tags.push('[要約:標準] 結論→理由→手順');
+  else if (settings.summaryLevel === 'detailed') tags.push('[要約:詳細] 前提→判断→手順→注意点');
+
+  if (settings.conversationTone === 'first') tags.push('[トーン:初めて] 丁寧め');
+  else if (settings.conversationTone === 'friendly') tags.push('[トーン:フレンドリー] 柔らかめ（砕けすぎ禁止）');
+  else if (settings.conversationTone === 'business') tags.push('[トーン:仕事] 用件中心で短く');
+
+  if (settings.politeSuppress) tags.push('[丁寧抑制ON] 前置き・挨拶を削る');
+
+  if (tags.length > 0) return baseInstr + '\n\n【運用タグ】\n' + tags.join('\n');
+  return baseInstr;
+}
+
+function loadLog(sessionId){
+  if(!sessionId) return;
+  if(!confirm("過去ログを読み込みますか？")) return;
+  
+  closeHistoryModal();
+  
+  google.script.run
+    .withSuccessHandler((logs) => {
+      let arr = logs;
+      if (typeof logs === "string") {
+        try { arr = JSON.parse(logs); } catch (e) { arr = []; }
+      }
+      if (!Array.isArray(arr)) arr = [];
+      
+      if (arr.length === 0) {
+        alert("ログがありません");
+        return;
+      }
+      
+      const tl = document.getElementById('timeline');
+      if (!tl) {
+        alert("タイムライン要素が見つかりません");
+        return;
+      }
+      
+      tl.innerHTML = "";
+      
+      arr.forEach((log) => {
+        const speaker = String(log.speaker || "unknown");
+        const content = String(log.content || "");
+        const time = String(log.time || "");
+        
+        const displayName = normalizeDisplayName(speaker, null);
+        
+        let roleBadge = "";
+        let roleClass = "";
+        const lowerSpeaker = speaker.toLowerCase();
+        if (lowerSpeaker.includes('proposer') || assignedRoles[speaker] === 'proposer') {
+          roleBadge = '<span class="role-badge" style="background:var(--role-proposer);">提案</span>';
+          roleClass = 'role-proposer';
+        } else if (lowerSpeaker.includes('opposer') || assignedRoles[speaker] === 'opposer') {
+          roleBadge = '<span class="role-badge" style="background:var(--role-opposer);">反論</span>';
+          roleClass = 'role-opposer';
+        } else if (lowerSpeaker.includes('tech') || assignedRoles[speaker] === 'tech') {
+          roleBadge = '<span class="role-badge" style="background:var(--role-tech);">技術</span>';
+          roleClass = 'role-tech';
+        } else if (lowerSpeaker === 'yui' || lowerSpeaker.includes('mc')) {
+          roleBadge = '<span class="role-badge" style="background:#64748b;">司会</span>';
+        }
+        
+        const card = document.createElement('div');
+        card.className = `timeline-card ${roleClass}`;
+        card.innerHTML = `
+          <div class="tl-header h-${speaker.toLowerCase()}">
+            <span>${displayName} ${roleBadge}</span>
+            <span>${time}</span>
+          </div>
+          <div class="tl-body">${formatMarkdown(content)}</div>
+        `;
+        tl.appendChild(card);
+      });
+      
+      document.getElementById('mainStage').style.display = 'block';
+      document.getElementById('progressZone').style.display = 'none';
+      
+      window.scrollTo(0, document.body.scrollHeight);
+      
+      document.getElementById('statusText').innerText = "過去ログを表示しました";
+      document.getElementById('statusText').style.color = '#10b981';
+    })
+    .withFailureHandler((err) => {
+      alert("ログの読み込みに失敗: " + (err?.message || err));
+    })
+    .getSessionLogs(sessionId);
+}
+
+function deleteLog(id, btn){
+  if(!id) return;
+  if(!confirm("削除しますか？")) return;
+  google.script.run.withSuccessHandler(r=>{
+    if(r.success && btn) btn.parentElement.remove();
+  }).deleteLog(id);
+}
 </script>
 </body>
 </html>
