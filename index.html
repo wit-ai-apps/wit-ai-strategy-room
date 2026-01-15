@@ -1,9 +1,9 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.0-nabechou-request-final
-  DATE(JST): 2026-01-15 20:30 JST
-  TITLE: インジケータ2種追加・オート詳細度3段階・マニュアル追質問・送信先選択強化・命名ルール固定・ログ復元改善・「以上。」自動付与・AI名カスタマイズ
+  VERSION: v17.0.0-nabechou-request-final-fix
+  DATE(JST): 2026-01-15 21:00 JST
+  TITLE: インジケータ2種追加・オート詳細度3段階・マニュアル追質問・送信先選択強化・命名ルール固定・ログ復元改善・「以上。」自動付与・AI名カスタマイズ・onclick関数公開修正
   CHANGES:
   - 【v17.0.0】インジケータ2種追加: ドット方式（●で状態表示）・バー方式（進捗バー）を実装、設定から方式選択可能
   - 【v17.0.0】オートモード：発言量を「簡単/標準/詳細」で切り替え（既存のsummaryLevelを活用、プロンプト末尾に明確に反映）
@@ -23,7 +23,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Round Table v17.0.0-nabechou-request-final</title>
+<title>AI Round Table v17.0.0-nabechou-request-final-fix</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -200,7 +200,7 @@
 <div class="container" id="appContainer">
   <div class="header">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div class="app-title">AI Round Table <span class="app-meta">v17.0.0-nabechou-request-final</span></div>
+      <div class="app-title">AI Round Table <span class="app-meta">v17.0.0-nabechou-request-final-fix</span></div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="font-ctrl-group">
@@ -1708,6 +1708,105 @@ function deleteLog(id, btn){
     }
   }).deleteLog(id);
 }
+
+// ★v17.0.0-fix: onclick用の関数をwindowに公開（GAS環境での動作保証）★
+Object.assign(window, {
+  // フォント・UI操作
+  setFontSize,
+  updateClock,
+  // モード・設定
+  setMode,
+  openSettingsModal,
+  closeSettingsModal,
+  saveSettingsAndClose,
+  applySettingsToUI,
+  // 入力・ファイル操作
+  insertTemplate,
+  resetInput,
+  pasteFromClipboard,
+  handleFileSelect,
+  uploadCode,
+  // 会議・送信
+  startProcess,
+  startAuto,
+  startManual,
+  sendManualMessage,
+  selectAllManualTargets,
+  clearManualTargets,
+  toggleManualTarget,
+  setFollowupTarget,
+  // モーダル操作
+  openModal,
+  closeModal,
+  openHistoryModal,
+  closeHistoryModal,
+  // リセット
+  tryReset,
+  performReset,
+  // ログ操作
+  loadLog,
+  deleteLog,
+  // コード表示
+  openCode,
+  copyCode,
+  // その他
+  toggleAgent,
+  updateStep
+});
+
+// ★v17.0.0-fix: エラーハンドリング（画面内デバッグ欄への出力）★
+(function() {
+  const debugMode = new URLSearchParams(window.location.search).get('debug') === '1';
+  if (!debugMode) return;
+  
+  // デバッグ表示エリアを作成
+  const debugDiv = document.createElement('div');
+  debugDiv.id = 'debug-console';
+  debugDiv.style.cssText = 'position:fixed;bottom:10px;right:10px;width:400px;max-height:300px;background:rgba(0,0,0,0.9);color:#0f0;padding:10px;border-radius:8px;font-family:monospace;font-size:11px;overflow-y:auto;z-index:10000;display:none;';
+  document.body.appendChild(debugDiv);
+  
+  function addDebugLog(type, message, error) {
+    if (!debugDiv) return;
+    debugDiv.style.display = 'block';
+    const time = new Date().toLocaleTimeString('ja-JP');
+    const logEntry = document.createElement('div');
+    logEntry.style.cssText = 'margin-bottom:4px;padding:4px;border-left:3px solid ' + 
+      (type === 'error' ? '#f00' : type === 'warning' ? '#ff0' : '#0f0') + ';';
+    logEntry.textContent = `[${time}] ${type.toUpperCase()}: ${message}`;
+    if (error && error.stack) {
+      const stackEntry = document.createElement('div');
+      stackEntry.style.cssText = 'margin-left:10px;font-size:10px;color:#888;';
+      stackEntry.textContent = error.stack.split('\n').slice(0, 3).join('\n');
+      logEntry.appendChild(stackEntry);
+    }
+    debugDiv.appendChild(logEntry);
+    debugDiv.scrollTop = debugDiv.scrollHeight;
+    
+    // 最大50件まで保持
+    while (debugDiv.children.length > 50) {
+      debugDiv.removeChild(debugDiv.firstChild);
+    }
+  }
+  
+  // グローバルエラーハンドラー
+  window.addEventListener('error', (event) => {
+    addDebugLog('error', `${event.message} (${event.filename}:${event.lineno}:${event.colno})`, event.error);
+  });
+  
+  // Promise rejection ハンドラー
+  window.addEventListener('unhandledrejection', (event) => {
+    addDebugLog('error', `Unhandled Promise Rejection: ${event.reason}`, event.reason);
+  });
+  
+  // コンソールログもキャプチャ（オプション）
+  const originalConsoleError = console.error;
+  console.error = function(...args) {
+    originalConsoleError.apply(console, args);
+    addDebugLog('error', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+  };
+  
+  addDebugLog('info', 'デバッグモード有効');
+})();
 </script>
 </body>
 </html>
