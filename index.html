@@ -1,9 +1,9 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.0-nabechou-request
-  DATE(JST): 2026-01-15 20:01 JST
-  TITLE: インジケータ2種追加・オート詳細度3段階・マニュアル追質問・送信先選択強化・命名ルール固定・ログ復元改善
+  VERSION: v17.0.0-nabechou-request-final
+  DATE(JST): 2026-01-15 20:30 JST
+  TITLE: インジケータ2種追加・オート詳細度3段階・マニュアル追質問・送信先選択強化・命名ルール固定・ログ復元改善・「以上。」自動付与・AI名カスタマイズ
   CHANGES:
   - 【v17.0.0】インジケータ2種追加: ドット方式（●で状態表示）・バー方式（進捗バー）を実装、設定から方式選択可能
   - 【v17.0.0】オートモード：発言量を「簡単/標準/詳細」で切り替え（既存のsummaryLevelを活用、プロンプト末尾に明確に反映）
@@ -23,7 +23,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Round Table v17.0.0-nabechou-request</title>
+<title>AI Round Table v17.0.0-nabechou-request-final</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -200,7 +200,7 @@
 <div class="container" id="appContainer">
   <div class="header">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div class="app-title">AI Round Table <span class="app-meta">v17.0.0-nabechou-request</span></div>
+      <div class="app-title">AI Round Table <span class="app-meta">v17.0.0-nabechou-request-final</span></div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="font-ctrl-group">
@@ -369,6 +369,45 @@
         <option value="detailed">詳細（手順・注意点・代替案まで）</option>
       </select>
     </div>
+    <!-- ★v17.0.0追加：AI名カスタマイズ★ -->
+    <div>
+      <label style="font-weight:bold;display:block;margin-bottom:8px;">👤 AI表示名のカスタマイズ</label>
+      <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:#f8fafc;border-radius:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="width:80px;font-size:0.85rem;">Yui:</label>
+          <input type="text" id="customName-yui" placeholder="Yui（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="width:80px;font-size:0.85rem;">Gemini:</label>
+          <input type="text" id="customName-gemini" placeholder="Gemini（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="width:80px;font-size:0.85rem;">Rex:</label>
+          <input type="text" id="customName-rex" placeholder="Rex（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="width:80px;font-size:0.85rem;">DeepSeek:</label>
+          <input type="text" id="customName-deepseek" placeholder="DeepSeek（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="width:80px;font-size:0.85rem;">Llama:</label>
+          <input type="text" id="customName-llama" placeholder="Llama（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="width:80px;font-size:0.85rem;">Qwen:</label>
+          <input type="text" id="customName-qwen" placeholder="Qwen（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="width:80px;font-size:0.85rem;">Mistral:</label>
+          <input type="text" id="customName-mistral" placeholder="Mistral（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="width:80px;font-size:0.85rem;">Dolphin:</label>
+          <input type="text" id="customName-dolphin" placeholder="Dolphin（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+        </div>
+        <div style="font-size:0.75rem;color:#64748b;margin-top:4px;">※ 空欄の場合はデフォルト名（プラットフォーム名）が使用されます</div>
+      </div>
+    </div>
   </div>
   <div style="display:flex;justify-content:center;gap:10px;margin-top:25px;">
     <button class="btn btn-secondary" onclick="closeSettingsModal()">キャンセル</button>
@@ -398,6 +437,7 @@ let settings = {
   politeSuppress: false, // true: 丁寧すぎ抑制ON
   indicatorMode: 'text', // 'off' / 'text' / 'dot' / 'bar'
   responseDetail: 'standard', // 'simple' / 'standard' / 'detailed' (オートモード用)
+  customNames: {}, // AI名のカスタマイズ（例: { 'yui': 'カスタム名' }）
   indicators: {
     thinking: true,
     timeout: true,
@@ -538,9 +578,9 @@ function _handleCutContinuation_(speaker, responseText, context, imgs, sessionId
       document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(finalText);
       // ★v17.0.0修正：インジケータ更新（CUT完了/継続終了 - 方式に応じて表示）★
       if (isStillCut && settings.indicators.cut) {
-        updateIndicator(indicatorId, 'error', '✂ CUT → End');
+        updateIndicator(indicatorId, 'error', settings.indicatorMode === 'text' ? '✂ CUT → End' : '');
       } else {
-        updateIndicator(indicatorId, 'completed', '✓ Received');
+        updateIndicator(indicatorId, 'completed', settings.indicatorMode === 'text' ? '✓ Received' : '');
       }
       // ★修正：contextは既に呼び出し元で追加済みなので、続き部分のみ追加★
       context += `[${speaker}]: ${contText}\n`;
@@ -557,8 +597,14 @@ function _handleCutContinuation_(speaker, responseText, context, imgs, sessionId
   }).runConferenceTurn(speaker, context, "前の回答が途中で切れています。続きを完成させてください。", imgs, sessionId, title, role);
 }
 
-// ★v17.0.0修正：表示名の正規化関数（固定名のみ、Alpha/Beta等を廃止）★
+// ★v17.0.0修正：表示名の正規化関数（固定名のみ、Alpha/Beta等を廃止、カスタム名優先）★
 function normalizeDisplayName(speaker, role) {
+  // ★v17.0.0追加：カスタム名を優先（ユーザーが設定した名前があればそれを使用）★
+  const lowerSpeaker = String(speaker || '').toLowerCase().trim();
+  if (settings.customNames && settings.customNames[lowerSpeaker] && settings.customNames[lowerSpeaker].trim()) {
+    return settings.customNames[lowerSpeaker].trim();
+  }
+  
   // 固定のAI名マップ（プラットフォーム名ベースで固定、勝手な変名禁止）
   const fixedNameMap = {
     // 既存のAI名（小文字で統一）
@@ -585,9 +631,6 @@ function normalizeDisplayName(speaker, role) {
     'delta': 'UNKNOWN'
   };
   
-  // 小文字に変換して検索
-  const lowerSpeaker = String(speaker || '').toLowerCase().trim();
-  
   // 固定マップに存在する場合
   if (fixedNameMap[lowerSpeaker]) {
     return fixedNameMap[lowerSpeaker];
@@ -605,7 +648,7 @@ function normalizeDisplayName(speaker, role) {
   return 'UNKNOWN';
 }
 
-// ★修正：Markdownフォーマット関数（marked.js削除によりフォールバック処理のみ）★
+// ★v17.0.0修正：Markdownフォーマット関数（すべてのAI回答の最後に「以上。」を付ける）★
 function formatMarkdown(text) {
   if (!text) return '';
   
@@ -614,10 +657,16 @@ function formatMarkdown(text) {
   
   // コードブロック処理
   formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, l, c) => {
-    const i = codeSnippets.length; 
+    const i = codeSnippets.length;
     codeSnippets.push({ l: l||'text', c: c.trim() });
     return `__CODE_${i}__`;
   });
+  
+  // ★v17.0.0追加：すべてのAI回答の最後に「以上。」を付ける（既に「以上」で終わっている場合は重複しない）★
+  const cleanText = formatted.replace(/<[^>]+>/g, '').trim(); // HTMLタグを除去して判定
+  if (cleanText && !/以上[。！？\.]?$/.test(cleanText)) {
+    formatted = formatted + '<br><br><span style="color:#64748b; font-weight:bold;">以上。</span>';
+  }
   
   // 改行処理
   formatted = formatted.replace(/\n/g, '<br>');
@@ -661,15 +710,35 @@ function updateIndicator(indicatorId, state, text) {
   
   if (indicatorMode === 'off') {
     indicatorEl.style.display = 'none';
+    indicatorEl.style.opacity = '0';
     return;
   }
   
   if (indicatorMode === 'dot') {
+    // ドット方式：状態に応じてクラスを更新
     indicatorEl.className = `indicator-dot ${state}`;
     indicatorEl.style.display = 'inline-block';
+    indicatorEl.style.opacity = '1';
   } else if (indicatorMode === 'bar') {
+    // バー方式：状態に応じてクラスを更新
     indicatorEl.className = `indicator-bar ${state}`;
     indicatorEl.style.display = 'block';
+    indicatorEl.style.opacity = '1';
+    // バー方式の場合、進捗を更新
+    const progressEl = indicatorEl.querySelector('.indicator-bar-progress');
+    if (progressEl) {
+      if (state === 'waiting') {
+        progressEl.style.width = '0%';
+      } else if (state === 'sending') {
+        progressEl.style.width = '30%';
+      } else if (state === 'receiving') {
+        progressEl.style.width = '70%';
+      } else if (state === 'completed') {
+        progressEl.style.width = '100%';
+      } else if (state === 'error') {
+        progressEl.style.width = '100%';
+      }
+    }
   } else {
     // 従来方式（text）
     indicatorEl.textContent = text || '';
@@ -1027,9 +1096,8 @@ function runStep(speaker, instr, imgs, title, step, role){
         // ★修正：CUT自動継続を最大2回に強化★
         _handleCutContinuation_(speaker, responseText, context, imgs, sessionId, title, role, id, indicatorId, 0, resolve);
       } else {
-        // ★v16.3.8-hf1修正：CUT検知なしの場合、終端表示を付与★
-        const finalText = responseText + '\n\n<span style="color:#10b981; font-weight:bold;">（終了）</span>';
-        document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(finalText);
+        // ★v17.0.0修正：CUT検知なしの場合、formatMarkdownで「以上。」が自動追加される★
+        document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(responseText);
         context += `[${speaker}]: ${responseText}\n`;
         resolve(); // 必ず次のターンへ進む
       }
@@ -1365,14 +1433,35 @@ function openHistoryModal(){
     }
     
     // ★v16.3.8-hf1修正：ログリンク（URL/ファイルIDが取れない時は遷移しない、可能なら新しいタブで開く）★
+    // ★v17.0.0修正：ログ一覧に日付を表示（タイトル/議題の復元確認）★
     document.getElementById('logList').innerHTML = list.map(x=>{
+      // 日付フォーマット（timeがDateオブジェクトの場合は変換）
+      let dateStr = '';
+      if (x.time) {
+        if (x.time instanceof Date) {
+          const d = x.time;
+          dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        } else if (x.date) {
+          // dateフィールドがある場合
+          if (x.date instanceof Date) {
+            const d = x.date;
+            dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          } else {
+            dateStr = String(x.date);
+          }
+        } else {
+          dateStr = String(x.time);
+        }
+      }
+      const displayText = dateStr ? `${dateStr} - ${x.title||'(無題)'}` : `${x.time || ''} ${x.title||'(無題)'}`;
+      
       const hasUrl = x.url && x.url.trim() && x.url.trim() !== '';
       const hasFileId = x.fileId && x.fileId.trim() && x.fileId.trim() !== '';
       if (hasUrl || hasFileId) {
         const url = hasUrl ? x.url : `https://drive.google.com/file/d/${x.fileId}/view`;
-        return `<div class="log-item"><div class="log-text" onclick="window.open('${url}', '_blank')">${x.time || ''} ${x.title||'(無題)'}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
+        return `<div class="log-item"><div class="log-text" onclick="window.open('${url}', '_blank')">${displayText}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
       } else {
-        return `<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${x.time || ''} ${x.title||'(無題)'}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
+        return `<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${displayText}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
       }
     }).join('');
   }).withFailureHandler(err=>{
@@ -1407,6 +1496,16 @@ function applySettingsToUI() {
   document.getElementById('indicatorCut').checked = settings.indicators.cut;
   document.getElementById('indicatorLate').checked = settings.indicators.late;
   document.getElementById('indicatorError').checked = settings.indicators.error;
+  
+  // ★v17.0.0追加：カスタム名をUIに反映★
+  AGENTS.forEach(agent => {
+    const inputEl = document.getElementById(`customName-${agent}`);
+    if (inputEl && settings.customNames && settings.customNames[agent]) {
+      inputEl.value = settings.customNames[agent];
+    } else if (inputEl) {
+      inputEl.value = '';
+    }
+  });
 }
 
 // ★追加：設定を保存してモーダルを閉じる★
@@ -1421,6 +1520,21 @@ function saveSettingsAndClose() {
   settings.indicators.cut = document.getElementById('indicatorCut').checked;
   settings.indicators.late = document.getElementById('indicatorLate').checked;
   settings.indicators.error = document.getElementById('indicatorError').checked;
+  
+  // ★v17.0.0追加：カスタム名を保存★
+  if (!settings.customNames) settings.customNames = {};
+  AGENTS.forEach(agent => {
+    const inputEl = document.getElementById(`customName-${agent}`);
+    if (inputEl) {
+      const customName = inputEl.value.trim();
+      if (customName) {
+        settings.customNames[agent] = customName;
+      } else {
+        delete settings.customNames[agent];
+      }
+    }
+  });
+  
   saveSettings();
   closeSettingsModal();
 }
