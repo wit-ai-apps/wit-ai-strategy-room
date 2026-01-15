@@ -1,17 +1,17 @@
-
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v16.3.8-hf1-full
-  DATE(JST): 2026-01-10 00:14 JST
-  TITLE: CUT継続でcontextが増えない問題の修正（参照箱）＋二重追加防止の完全化＋detectCut誤検知低減＋インジケータ矛盾解消（UIそのまま）
+  VERSION: v0216.3.8-hf3-full
+  DATE(JST): 26-01-10 16:12 JST
+  TITLE: 検証修正：過去ログ復元でタイトル/議題を復活＋マニュアルの司会干渉排除＋表示名（Alpha/Beta廃止）＋終端マーカー指示＋進捗インジケータ復活（UIそのまま）
   CHANGES:
-  - 【最重要】CUT継続でもcontextが確実に増えるように修正（ctx.text参照箱→最後にglobal contextへ反映）
-  - 【最重要】二重追加防止を完全化（最初のresponseはrunStepで1回、続きは_handleCutContinuation_でcont分のみ追加）
-  - detectCutの誤検知を低減（「だ/よ/ね/わ/な」等をCUT候補から外し、短文×助詞止まり・接続形・省略記号中心に）
-  - インジケータの矛盾解消（Receivedをthinkingと独立に表示。設定ON/OFFは種類別に反映）
+  - 【最重要】過去ログ読み込み時に「タイトル」「議題」を復元（ローカルにsession meta保存）
+  - 【最重要】マニュアルモードで司会者（オートのMC）が選択制限に影響しないよう分離
+  - 表示名の改善：Alpha/Beta呼称を廃止し、既定はプラットフォーム名＋ユーザー命名を優先
+  - 途中で切れにくくする指示：各AIは末尾を「以上。」で終える（detectCutも誤検知低減）
+  - 進捗インジケータ復活：オート/マニュアルともに進捗バーを構築して表示
   AUTHOR: Yui（Fix/Integration）
-  BUILD_PARAM: ?b=2026-01-10_0014_hf1-full
+  BUILD_PARAM: ?b=2026-01-10_1612_hf3-full
   DEBUG_PARAM: &debug=1
 -->
 <!DOCTYPE html>
@@ -19,7 +19,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Round Table v16.3.8-hf1-full</title>
+<title>AI Round Table v16.3.8-hf3-full</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -97,7 +97,7 @@
     position: absolute;
     bottom: 60px;
     left: 0;
-    width: 400px; /* ★元の値に戻す（UI凍結） */
+    width: 400px;
     max-width: 80vw;
     background: white;
     padding: 12px;
@@ -166,7 +166,7 @@
 <div class="container" id="appContainer">
   <div class="header">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div class="app-title">AI Round Table <span class="app-meta">v16.3.8-hf1-full</span></div>
+      <div class="app-title">AI Round Table <span class="app-meta">v16.3.8-hf3-full</span></div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="font-ctrl-group">
@@ -176,7 +176,6 @@
       </div>
       <button class="btn btn-secondary" onclick="openHistoryModal()">📂 ログ</button>
       <button class="btn btn-secondary" onclick="tryReset()">🔄 リセット</button>
-      <!-- ★追加：設定ボタン（例外許可：UI追加）★ -->
       <button class="btn btn-secondary" onclick="openSettingsModal()">⚙ 設定</button>
     </div>
   </div>
@@ -247,14 +246,12 @@
 <div id="resetModal" class="modal-overlay"><div class="modal-content" style="max-width:400px;text-align:center;"><h3 style="margin-top:0;">🔄 リセットしますか？</h3><p style="color:#666;">画面の内容と一時保存データがクリアされます。<br>(過去ログは消えません)</p><div style="display:flex;justify-content:center;gap:10px;margin-top:20px;"><button class="btn btn-secondary" onclick="closeModal('resetModal')">キャンセル</button><button class="btn btn-danger" onclick="performReset()">実行する</button></div></div></div>
 <div id="codeModal" class="modal-overlay" style="z-index:3000;"><div class="modal-content code-modal-content"><div style="padding:15px;background:#2d2d2d;display:flex;justify-content:space-between;"><span style="font-weight:bold;color:#fff;">📜 ソースコード</span><div><button class="btn btn-primary" style="height:32px;font-size:0.8rem;" onclick="copyCode()">コピー</button> <button onclick="closeModal('codeModal')" class="btn btn-secondary" style="background:#444;color:#fff;border:none;">✕</button></div></div><div class="code-modal-body"><pre><code id="codeViewerContent"></code></pre></div></div></div>
 
-<!-- ★追加：設定モーダル（例外許可：UI追加）★ -->
 <div id="settingsModal" class="modal-overlay"><div class="modal-content" style="max-width:600px;max-height:90vh;overflow-y:auto;">
   <div style="display:flex;justify-content:space-between;margin-bottom:20px;align-items:center;">
     <h2 style="margin:0;">⚙ 設定</h2>
     <button onclick="closeSettingsModal()" class="btn btn-secondary">✕</button>
   </div>
   <div style="display:flex;flex-direction:column;gap:20px;">
-    <!-- 要約レベル -->
     <div>
       <label style="font-weight:bold;display:block;margin-bottom:8px;">📊 要約レベル</label>
       <select id="settingSummaryLevel" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;">
@@ -263,7 +260,6 @@
         <option value="detailed">詳細（前提→判断→手順→注意点）</option>
       </select>
     </div>
-    <!-- 会話トーン -->
     <div>
       <label style="font-weight:bold;display:block;margin-bottom:8px;">💬 会話トーン</label>
       <select id="settingConversationTone" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;">
@@ -272,14 +268,12 @@
         <option value="business">仕事（用件中心で短く）</option>
       </select>
     </div>
-    <!-- 丁寧すぎ抑制 -->
     <div>
       <label style="font-weight:bold;display:block;margin-bottom:8px;cursor:pointer;">
         <input type="checkbox" id="settingPoliteSuppress" style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
         丁寧すぎ抑制（前置き・挨拶を削る）
       </label>
     </div>
-    <!-- インジケータ表示 -->
     <div>
       <label style="font-weight:bold;display:block;margin-bottom:8px;">📊 インジケータ表示</label>
       <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:#f8fafc;border-radius:8px;">
@@ -314,12 +308,20 @@
 
 <script>
 const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
+
+// selected: 空セット = 全員（運用統一）
 let selected = ['yui','gemini','rex','deepseek'];
+
 let currentMode = null;
-let imagesBase64 = []; let context = ""; let sessionId = "SESS_"+Date.now();
+let imagesBase64 = []; 
+let context = ""; 
+let sessionId = "SESS_"+Date.now();
 let codeSnippets = [];
 let assignedRoles = {};
-const STORAGE_KEY = 'ai_round_v16_3_3';
+
+// 画面復元（タイムラインHTML）だけでなく、タイトル/議題も復元するため meta を保存
+const STORAGE_KEY = 'ai_round_v16_3_3';                 // 従来互換（mainStage.innerHTML）
+const STORAGE_META_KEY = 'ai_round_meta_v16_3_8_hf3';    // 追加（title/theme/sessionIdなど）
 const SETTINGS_STORAGE_KEY = 'ai_round_settings_v16_3_7';
 
 // ★設定値（localStorageから復元）★
@@ -356,7 +358,55 @@ function saveSettings() {
 }
 
 /* =========================================================
-   v16.3.8-hf1-full FIX 1: detectCut（誤検知低減）
+   v16.3.8-hf3-full: 表示名（Alpha/Beta廃止）＋ユーザー命名優先
+========================================================= */
+function _getUserNamedLabel_(agentKey) {
+  try {
+    const k = `ai_name_${agentKey}`;
+    const v = localStorage.getItem(k);
+    if (v && String(v).trim()) return String(v).trim();
+  } catch (e) {}
+  return "";
+}
+function _platformName_(agentKey) {
+  const map = {
+    yui: 'ChatGPT',
+    gemini: 'Gemini',
+    rex: 'Cursor',
+    deepseek: 'DeepSeek',
+    llama: 'Llama',
+    qwen: 'Qwen',
+    mistral: 'Mistral',
+    dolphin: 'Dolphin'
+  };
+  return map[String(agentKey || '').toLowerCase()] || (String(agentKey||'AI').charAt(0).toUpperCase()+String(agentKey||'AI').slice(1));
+}
+function normalizeDisplayName(speaker, role) {
+  const lowerSpeaker = String(speaker || '').toLowerCase();
+
+  // ユーザー命名があれば最優先
+  const userNamed = _getUserNamedLabel_(lowerSpeaker);
+  if (userNamed) return userNamed;
+
+  // 役割ラベル→モデル名（必要最小限）
+  const roleToModelMap = {
+    'ImageAnalyzer': 'Gemini',
+    'FactChecker': 'Gemini',
+    'CodeReviewer': 'Cursor',
+    'TechAdvisor': 'Cursor',
+    'Proposer': 'Gemini',
+    'Opposer': 'Gemini',
+    'Observer': 'Gemini'
+  };
+  const roleKey = String(role || speaker || '').replace(/[^a-zA-Z0-9]/g, '');
+  if (roleToModelMap[roleKey]) return roleToModelMap[roleKey];
+
+  // 既定はプラットフォーム名（Alpha/Beta廃止）
+  return _platformName_(lowerSpeaker);
+}
+
+/* =========================================================
+   v16.3.8-hf3-full: CUT誤検知低減（末尾マーカー「以上。」指示と併用）
 ========================================================= */
 function _detectCut_(text) {
   if (!text || typeof text !== 'string') return false;
@@ -373,10 +423,16 @@ function _detectCut_(text) {
   const last = lines[lines.length - 1];
   if (!last || last.length < 3) return false;
 
+  // 終端マーカーはCUTにしない
+  if (/(以上。|以上！|以上\!|終わり。|終わり！)$/.test(last)) return false;
+
   if (/[。！？!?\.]$/.test(last)) return false;
   if (/[\.．…]{2,}$/.test(last)) return true;
 
   const short = last.length <= 28;
+
+  // よくある語尾（だ/よ/ね/わ/な）はCUT候補から除外（hf1から継続）
+  if (short && /(だ|よ|ね|わ|な)$/.test(last)) return false;
 
   if (short && /(の|が|を|に|で|と|は|も|か|や|へ)$/.test(last)) return true;
   if (short && /(て|ので|のに|けど|けれど|から|ため|つつ)$/.test(last)) return true;
@@ -386,37 +442,7 @@ function _detectCut_(text) {
 }
 
 /* =========================================================
-   既存：表示名の正規化
-========================================================= */
-function normalizeDisplayName(speaker, role) {
-  const roleToModelMap = {
-    'ImageAnalyzer': 'Gemini',
-    'FactChecker': 'Gemini',
-    'CodeReviewer': 'Rex',
-    'TechAdvisor': 'Rex',
-    'Proposer': 'Gemini',
-    'Opposer': 'Gemini',
-    'Observer': 'Gemini',
-    'yui': 'Yui',
-    'gemini': 'Gemini',
-    'rex': 'Rex',
-    'deepseek': 'DeepSeek',
-    'llama': 'Llama',
-    'qwen': 'Qwen',
-    'mistral': 'Mistral',
-    'dolphin': 'Dolphin'
-  };
-  const lowerSpeaker = String(speaker || '').toLowerCase();
-  if (roleToModelMap[lowerSpeaker]) return roleToModelMap[lowerSpeaker];
-
-  const roleKey = String(role || speaker || '').replace(/[^a-zA-Z0-9]/g, '');
-  if (roleToModelMap[roleKey]) return roleToModelMap[roleKey];
-
-  return String(speaker || 'AI').charAt(0).toUpperCase() + String(speaker || 'AI').slice(1);
-}
-
-/* =========================================================
-   既存：Markdownフォーマット
+   Markdownフォーマット
 ========================================================= */
 function formatMarkdown(text) {
   if (!text) return '';
@@ -459,6 +485,7 @@ window.onload = () => {
   loadSettings();
   initUI(); 
   applySettingsToUI();
+  restoreFromStorage(); // ★過去ログ/タイトル/議題の復元
 };
 
 function initUI() {
@@ -470,28 +497,31 @@ function initUI() {
     const span = document.createElement('span');
     span.className = `agent-badge ${selected.includes(a)?'selected':''}`;
     span.setAttribute('data-agent', a); span.id = `badge-${a}`;
-    span.innerText = a.charAt(0).toUpperCase() + a.slice(1);
+    span.innerText = _platformName_(a);
     span.onclick = () => toggleAgent(a);
     con.appendChild(span);
 
     const opt = document.createElement('option');
-    opt.value = a; opt.innerText = a.charAt(0).toUpperCase() + a.slice(1);
+    opt.value = a; opt.innerText = _platformName_(a);
     mcSel.appendChild(opt);
   });
-  
+
+  // MC変更はオート時だけ意味がある。マニュアルの選択制限に影響させない
   mcSel.addEventListener('change', function() {
-    const newMc = this.value;
-    selected = selected.filter(a => a !== newMc);
+    if (currentMode !== 'auto') return;
     _updateBadgeStates_();
   });
   
   _updateBadgeStates_();
 }
 
-function updateClock(){document.getElementById('clock').innerText=new Date().toLocaleString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
+function updateClock(){
+  document.getElementById('clock').innerText=new Date().toLocaleString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
 
 function setFontSize(s) {
-  const r = document.body; document.querySelectorAll('.font-btn').forEach(b=>b.classList.remove('active'));
+  const r = document.body; 
+  document.querySelectorAll('.font-btn').forEach(b=>b.classList.remove('active'));
   if(s==='small'){r.style.fontSize='14px'; document.querySelectorAll('.font-btn')[0].classList.add('active');}
   if(s==='medium'){r.style.fontSize='16px'; document.querySelectorAll('.font-btn')[1].classList.add('active');}
   if(s==='large'){r.style.fontSize='20px'; document.querySelectorAll('.font-btn')[2].classList.add('active');}
@@ -506,31 +536,40 @@ function setMode(mode) {
   document.getElementById('roundWrapper').style.display = (mode==='auto') ? 'block' : 'none';
   document.getElementById('mainStage').style.display = 'none';
   document.getElementById('manualGrid').style.display = 'none';
+
+  // 進捗は、オート/マニュアルとも使える
   document.getElementById('progressZone').style.display = 'none';
+
+  // モード切替時に badge 状態を整える（ただしマニュアルではMC除外しない）
+  _updateBadgeStates_();
 }
 
 function toggleAgent(a) {
-  const currentMc = document.getElementById('mcSelect')?.value;
-  if (a === currentMc) return;
-
-  if(selected.includes(a)) { if(selected.length > 1) selected = selected.filter(x => x!==a); }
-  else selected.push(a);
-
+  // マニュアルではMC概念が無いので、選択制限をかけない
+  if(selected.includes(a)) { 
+    if(selected.length > 1) selected = selected.filter(x => x!==a); 
+  } else {
+    selected.push(a);
+  }
   _updateBadgeStates_();
 }
 
 function _updateBadgeStates_() {
-  const currentMc = document.getElementById('mcSelect')?.value;
+  const mc = document.getElementById('mcSelect')?.value;
+
   AGENTS.forEach(ag => {
     const el = document.getElementById(`badge-${ag}`);
     if (!el) return;
-    if (ag === currentMc) {
+
+    // オートのみ：MCは選択対象から外す
+    if (currentMode === 'auto' && ag === mc) {
       selected = selected.filter(x => x !== ag);
       el.classList.remove('selected');
-    } else {
-      if(selected.includes(ag)) el.classList.add('selected'); 
-      else el.classList.remove('selected');
+      return;
     }
+
+    if(selected.includes(ag)) el.classList.add('selected'); 
+    else el.classList.remove('selected');
   });
 }
 
@@ -540,12 +579,27 @@ function insertTemplate() {
   t.value = t.value + template; t.focus();
 }
 
-function resetInput() { document.getElementById('themeInput').value = ''; imagesBase64 = []; document.getElementById('previewArea').innerHTML = ''; }
+function resetInput() { 
+  document.getElementById('themeInput').value = ''; 
+  imagesBase64 = []; 
+  document.getElementById('previewArea').innerHTML = ''; 
+}
 function tryReset() { openModal('resetModal'); }
-function performReset() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
+function performReset() { 
+  localStorage.removeItem(STORAGE_KEY); 
+  localStorage.removeItem(STORAGE_META_KEY);
+  location.reload(); 
+}
 
+/* =========================================================
+   進捗バー（オート/マニュアル共通で使える）
+========================================================= */
 function buildProgressBar(totalSteps) {
+  const zone = document.getElementById('progressZone');
   const bar = document.getElementById('progressBarInner');
+  if (!zone || !bar) return;
+
+  zone.style.display = 'block';
   bar.innerHTML = '<div class="progress-line"></div>';
   for(let i=1; i<=totalSteps; i++) {
     let label = i===1 ? "開始" : i===totalSteps ? "完了" : "議論";
@@ -554,32 +608,42 @@ function buildProgressBar(totalSteps) {
 }
 function updateStep(s){ 
   const steps = document.querySelectorAll('.step');
-  steps.forEach((el, idx) => { if(idx+1 === s) el.classList.add('active'); else el.classList.remove('active'); });
+  steps.forEach((el, idx) => { 
+    if(idx+1 === s) el.classList.add('active'); 
+    else el.classList.remove('active'); 
+  });
 }
 
+/* =========================================================
+   会議開始
+========================================================= */
 function startProcess() {
   const theme = document.getElementById('themeInput').value;
   if(!theme) return alert("議題を入力してください");
   if(!currentMode) return alert("モードを選択してください");
   document.getElementById('statusText').innerText = "🚀 実行中...";
+  document.getElementById('statusText').style.color = '#10b981';
   if(currentMode === 'auto') startAuto(theme); else startManual(theme);
 }
 
 async function startAuto(theme) {
   document.getElementById('mainStage').style.display = 'block';
-  document.getElementById('progressZone').style.display = 'block';
   document.getElementById('timeline').innerHTML = '';
   
   const mc = document.getElementById('mcSelect').value;
   const rounds = parseInt(document.getElementById('roundSelect').value, 10);
   
   let targets = selected.length > 0 ? selected.filter(a => a !== mc) : AGENTS.filter(a => a !== mc);
-  
   if (targets.length < 2) {
     alert('オート会議は2人以上のAIが必要です。');
     document.getElementById('statusText').innerText = "❌ エラー: AIが不足";
+    document.getElementById('statusText').style.color = 'red';
     return;
   }
+
+  // 進捗（目安）：MC開始 + (rounds * targets数) + 最終まとめ
+  const totalSteps = 1 + (rounds * (targets.length)) + 1;
+  buildProgressBar(totalSteps);
   
   try {
     const participants = (selected.length > 0 ? selected : AGENTS).filter(a => a !== mc);
@@ -596,14 +660,17 @@ async function startAuto(theme) {
     const imgs = [...imagesBase64];
     let stepCount = 1;
 
-    const mcInstr = _applySettingsToInstruction_(`ユーザー議題:「${theme}」\n司会として議論を開始し、役割（提案者・反論者）を指名して議論を始めてください。`);
+    // 末尾マーカー指示（CUT抑制）
+    const endMarker = "必ず回答の最後を「以上。」で終えてください。途中で切れないように最後まで書き切ってください。";
+
+    const mcInstr = _applySettingsToInstruction_(`ユーザー議題:「${theme}」\n司会として議論を開始し、役割（提案者・反論者）を指名して議論を始めてください。\n${endMarker}`);
     await runStep(mc, mcInstr, imgs, title, stepCount++, 'mc');
 
     for (let r = 1; r <= rounds; r++) {
       let prefix = (rounds > 1) ? `【ラウンド ${r}/${rounds}】` : "";
       const proposers = targets.filter(a => assignedRoles[a] === 'proposer');
       for (const agent of proposers) {
-        const proposerInstr = _applySettingsToInstruction_(`${prefix}提案者として、具体的かつ論理的な解決策を提示してください。`);
+        const proposerInstr = _applySettingsToInstruction_(`${prefix}提案者として、具体的かつ論理的な解決策を提示してください。\n${endMarker}`);
         await runStep(agent, proposerInstr, imgs, title, stepCount++, 'proposer');
       }
       const others = targets.filter(a => assignedRoles[a] !== 'proposer');
@@ -612,16 +679,17 @@ async function startAuto(theme) {
         let msg = `${prefix}提案に対して意見してください。`;
         if(role === 'opposer') msg = `${prefix}反論者として、提案のリスクや欠陥を厳しく指摘してください。`;
         if(role === 'tech') msg = `${prefix}技術顧問として、コードや実装の実現可能性を検証してください。`;
-        const agentInstr = _applySettingsToInstruction_(msg);
+        const agentInstr = _applySettingsToInstruction_(msg + `\n${endMarker}`);
         await runStep(agent, agentInstr, imgs, title, stepCount++, role);
       }
     }
 
-    const finalInstBase = `議論を総括し、提案・反論・技術検証を統合して、最終的な【完全な解決策/コード】を作成してください。`;
+    const finalInstBase = `議論を総括し、提案・反論・技術検証を統合して、最終的な【完全な解決策/コード】を作成してください。\n${endMarker}`;
     const finalInst = _applySettingsToInstruction_(finalInstBase);
     await runStep(mc, finalInst, imgs, title, stepCount, 'mc');
     
     document.getElementById('statusText').innerText = "✅ 完了";
+    document.getElementById('statusText').style.color = '#10b981';
     saveStorage();
   } catch (e) {
     document.getElementById('statusText').innerText = "❌ エラー: " + (e.message || e);
@@ -631,7 +699,7 @@ async function startAuto(theme) {
 }
 
 /* =========================================================
-   v16.3.8-hf1-full FIX 2: CUT継続（ctx.text参照箱）＋二重追加根絶
+   CUT継続（hf1ベース）
 ========================================================= */
 function _handleCutContinuation_(
   speaker, responseText, ctx, imgs, sessionId, title, role,
@@ -688,18 +756,16 @@ function _handleCutContinuation_(
     if (isStillCut) {
       setIndicator('✂ CUT → End');
     } else {
-      // Receivedはthinkingと独立（矛盾解消）
       if (indicatorEl) indicatorEl.textContent = '✓ Received';
     }
 
-    // ★続き分だけctxへ追加（最初のresponseTextはrunStepで既に追加済み）
+    // 続き分だけctxへ追加（最初はrunStepで追加済み）
     ctx.text += `[${speaker}]: ${contText}\n`;
     resolve();
   }).withFailureHandler(() => {
     const failMsg = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています（続き要求失敗）</span>`;
     if (ansEl) ansEl.innerHTML = formatMarkdown(responseText + failMsg);
     setIndicator('✂ CUT → Failed');
-    // 失敗時はctxに追記しない（二重や矛盾を避ける）
     resolve();
   }).runConferenceTurn(
     speaker,
@@ -713,13 +779,13 @@ function _handleCutContinuation_(
 }
 
 /* =========================================================
-   v16.3.8-hf1-full FIX 3: runStep（context参照箱→必ずglobal反映）
+   runStep
 ========================================================= */
 function runStep(speaker, instr, imgs, title, step, role){
   return new Promise((resolve)=>{
     updateStep(step);
     const tl = document.getElementById('timeline');
-    const id = Date.now();
+    const id = Date.now() + Math.floor(Math.random()*1000);
 
     let roleBadge = ""; let roleClass = "";
     if(role === 'proposer') { roleBadge='<span class="role-badge" style="background:var(--role-proposer);">提案</span>'; roleClass='role-proposer'; }
@@ -741,7 +807,6 @@ function runStep(speaker, instr, imgs, title, step, role){
     );
     window.scrollTo(0, document.body.scrollHeight);
 
-    // ★参照箱（これに追記 → 最後にglobal contextへ戻す）
     const ctx = { text: (typeof context === 'string' ? context : String(context || "")) };
 
     const ansEl = document.getElementById(`ans-${id}`);
@@ -755,12 +820,10 @@ function runStep(speaker, instr, imgs, title, step, role){
       if (kind === 'error'   && !settings?.indicators?.error)   return;
       if (kind === 'cut'     && !settings?.indicators?.cut)     return;
 
-      // Receivedはthinkingと独立（矛盾解消）
       if (kind === 'received') {
         indicatorEl.textContent = txt;
         return;
       }
-
       indicatorEl.textContent = txt;
     };
 
@@ -834,11 +897,9 @@ function runStep(speaker, instr, imgs, title, step, role){
       }
 
       const responseText = normalized.response || normalized.text || normalized.message || String(normalized || "(無応答)");
-
-      // Receivedはthinkingと独立
       setIndicator('✓ Received', 'received');
 
-      // ★最初の応答はここで1回だけctxに追加（ここが二重追加防止の核）
+      // 最初の応答はここで1回だけctxに追加
       ctx.text += `[${speaker}]: ${responseText}\n`;
 
       const isCut = _detectCut_(responseText);
@@ -873,21 +934,39 @@ function runStep(speaker, instr, imgs, title, step, role){
   });
 }
 
+/* =========================================================
+   マニュアル（MC干渉排除＋進捗バー表示）
+========================================================= */
 function startManual(theme) {
   const grid = document.getElementById('manualGrid');
-  grid.style.display = 'grid'; grid.innerHTML = "";
+  grid.style.display = 'grid'; 
+  grid.innerHTML = "";
   
-  const mc = document.getElementById('mcSelect').value;
-  const targets = (selected.length > 0 ? selected : AGENTS).filter(a => a !== mc);
-  
+  // マニュアルでは「mcSelect」は使わない（干渉排除）
+  const targets = (selected.length > 0 ? selected : AGENTS);
+
+  // 進捗：並列なので 1→完了の2段扱い（見える化）
+  buildProgressBar(2);
+  updateStep(1);
+
   const cols = Math.min(targets.length, 4);
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  const title = document.getElementById('topicTitle').value || "";
+  const imgs = [...imagesBase64];
+
+  // 末尾マーカー指示
+  const endMarker = "必ず回答の最後を「以上。」で終えてください。途中で切れないように最後まで書き切ってください。";
+  const instr = _applySettingsToInstruction_(theme + "\n" + endMarker);
+
+  let completed = 0;
+
   targets.forEach(a => {
     const div = document.createElement('div'); div.className = 'mini-col';
-    const id = `hist-${a}-${Date.now()}`;
+    const id = `hist-${a}-${Date.now()}-${Math.floor(Math.random()*1000)}`;
     const displayName = normalizeDisplayName(a, null);
     div.innerHTML = `<div class="mini-head h-${a}">${displayName}</div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
     grid.appendChild(div);
+
     google.script.run.withSuccessHandler(raw => {
       let normalized = null;
       if (typeof raw === "string") {
@@ -899,15 +978,35 @@ function startManual(theme) {
       }
       const responseText = normalized.response || normalized.text || normalized.message || String(normalized || "(無応答)");
       document.getElementById(id).innerHTML = formatMarkdown(responseText);
-      saveStorage();
-    }).runConferenceTurn(a, theme, theme, imagesBase64, sessionId, "", null);
+
+      completed++;
+      if (completed >= targets.length) {
+        updateStep(2);
+        document.getElementById('statusText').innerText = "✅ 完了";
+        document.getElementById('statusText').style.color = '#10b981';
+        saveStorage();
+      }
+    }).withFailureHandler(err=>{
+      document.getElementById(id).innerHTML = `<span style="color:#ef4444;">(エラー) ${err?.message || err}</span>`;
+      completed++;
+      if (completed >= targets.length) {
+        updateStep(2);
+        document.getElementById('statusText').innerText = "✅ 完了（エラーあり）";
+        document.getElementById('statusText').style.color = '#ef4444';
+        saveStorage();
+      }
+    }).runConferenceTurn(a, theme, instr, imgs, sessionId, title, null);
   });
-  document.getElementById('statusText').innerText = "✅ 完了";
 }
 
+/* =========================================================
+   コードモーダル
+========================================================= */
 function openCode(i) {
-  const s = codeSnippets[i]; const el = document.getElementById('codeViewerContent');
-  el.textContent = s.c; el.className = `language-${s.l}`; 
+  const s = codeSnippets[i]; 
+  const el = document.getElementById('codeViewerContent');
+  el.textContent = s.c; 
+  el.className = `language-${s.l}`; 
   if (typeof hljs !== 'undefined' && hljs) hljs.highlightElement(el);
   openModal('codeModal');
 }
@@ -920,7 +1019,9 @@ function uploadCode(){
   if(c) google.script.run.withSuccessHandler(alert).uploadToGithub(prompt("File?","Code.gs"),c);
 }
 
-// Image Handling
+/* =========================================================
+   Image Handling
+========================================================= */
 async function handleFileSelect(e){
   const f = Array.from(e.target.files);
   for(const x of f){
@@ -977,14 +1078,65 @@ async function pasteFromClipboard(){
   }
 }
 
+/* =========================================================
+   保存/復元（タイトル/議題も復元）
+========================================================= */
+function _saveMeta_(){
+  try {
+    const meta = {
+      topicTitle: document.getElementById('topicTitle')?.value || "",
+      themeInput: document.getElementById('themeInput')?.value || "",
+      sessionId: sessionId,
+      savedAt: Date.now()
+    };
+    localStorage.setItem(STORAGE_META_KEY, JSON.stringify(meta));
+  } catch (e) {
+    console.warn('save meta failed:', e);
+  }
+}
+
 function saveStorage(){
   try {
     localStorage.setItem(STORAGE_KEY, document.getElementById('mainStage').innerHTML);
+    _saveMeta_();
   } catch (e) {
     console.warn('saveStorage failed:', e);
   }
 }
 
+function restoreFromStorage(){
+  // タイムライン復元（従来互換）
+  try {
+    const html = localStorage.getItem(STORAGE_KEY);
+    if (html) {
+      document.getElementById('mainStage').innerHTML = html;
+      document.getElementById('mainStage').style.display = 'block';
+    }
+  } catch (e) {}
+
+  // タイトル/議題復元
+  try {
+    const metaRaw = localStorage.getItem(STORAGE_META_KEY);
+    if (metaRaw) {
+      const meta = JSON.parse(metaRaw);
+      if (meta && typeof meta === 'object') {
+        if (document.getElementById('topicTitle') && typeof meta.topicTitle === 'string') {
+          document.getElementById('topicTitle').value = meta.topicTitle;
+        }
+        if (document.getElementById('themeInput') && typeof meta.themeInput === 'string') {
+          document.getElementById('themeInput').value = meta.themeInput;
+        }
+        if (meta.sessionId) sessionId = meta.sessionId; // 同一sessionの再取得に寄せる
+      }
+    }
+  } catch (e) {
+    console.warn('restore meta failed:', e);
+  }
+}
+
+/* =========================================================
+   履歴
+========================================================= */
 function openHistoryModal(){
   openModal('historyModal');
   google.script.run.withSuccessHandler(l=>{
