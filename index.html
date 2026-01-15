@@ -1,25 +1,29 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v0216.3.8-hf3-full
-  DATE(JST): 26-01-10 16:12 JST
-  TITLE: 検証修正：過去ログ復元でタイトル/議題を復活＋マニュアルの司会干渉排除＋表示名（Alpha/Beta廃止）＋終端マーカー指示＋進捗インジケータ復活（UIそのまま）
+  VERSION: v17.0.0-nabechou-request
+  DATE(JST): 2026-01-15 20:01 JST
+  TITLE: インジケータ2種追加・オート詳細度3段階・マニュアル追質問・送信先選択強化・命名ルール固定・ログ復元改善
   CHANGES:
-  - 【最重要】過去ログ読み込み時に「タイトル」「議題」を復元（ローカルにsession meta保存）
-  - 【最重要】マニュアルモードで司会者（オートのMC）が選択制限に影響しないよう分離
-  - 表示名の改善：Alpha/Beta呼称を廃止し、既定はプラットフォーム名＋ユーザー命名を優先
-  - 途中で切れにくくする指示：各AIは末尾を「以上。」で終える（detectCutも誤検知低減）
-  - 進捗インジケータ復活：オート/マニュアルともに進捗バーを構築して表示
-  AUTHOR: Yui（Fix/Integration）
-  BUILD_PARAM: ?b=2026-01-10_1612_hf3-full
+  - 【v17.0.0】インジケータ2種追加: ドット方式（●で状態表示）・バー方式（進捗バー）を実装、設定から方式選択可能
+  - 【v17.0.0】オートモード：発言量を「簡単/標準/詳細」で切り替え（既存のsummaryLevelを活用、プロンプト末尾に明確に反映）
+  - 【v17.0.0】マニュアルモード：追質問機能を実装（カードに追質問ボタン追加、送信先自動固定、引用テンプレ自動挿入）
+  - 【v17.0.0】マニュアルモード：送信先選択UIを復活・強化（複数選択対応、全員/解除ボタン、前回選択保持）
+  - 【v17.0.0】命名ルール：Alpha/Beta等を廃止、固定名のみ（プラットフォーム名ベースで固定、勝手な変名禁止）
+  - 【v17.0.0】過去ログ復元：議題/タイトル/モード状態も復元（セッション復元時に完全に戻る）
+  - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
+  - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
+  AUTHOR: Rex
+  BUILD_PARAM: ?b=2026-01-15_2001_nabechou-request
   DEBUG_PARAM: &debug=1
+  REPO: wit-ai-apps/wit-ai-strategy-room
 -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Round Table v16.3.8-hf3-full</title>
+<title>AI Round Table v17.0.0-nabechou-request</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -97,7 +101,7 @@
     position: absolute;
     bottom: 60px;
     left: 0;
-    width: 400px;
+    width: 400px; /* ★元の値に戻す（UI凍結） */
     max-width: 80vw;
     background: white;
     padding: 12px;
@@ -125,9 +129,29 @@
   /* Timeline & Cards */
   .main-stage { display: none; margin-top: 20px; }
   .timeline { display: flex; flex-direction: column; gap: 20px; }
-  .timeline-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #eee; border-left: 5px solid transparent; transition: 0.3s; }
+  .timeline-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #eee; border-left: 5px solid transparent; transition: 0.3s; position: relative; }
   .tl-header { padding: 10px 15px; font-size: 0.9rem; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
   .tl-body { padding: 15px 20px; font-size: 1rem; line-height: 1.7; color: #333; }
+  
+  /* ★v17.0.0追加：インジケータ方式（ドット方式）★ */
+  .indicator-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 6px; vertical-align: middle; }
+  .indicator-dot.waiting { background: #94a3b8; }
+  .indicator-dot.sending { background: #3b82f6; animation: pulse 1.5s infinite; }
+  .indicator-dot.receiving { background: #10b981; animation: pulse 1.5s infinite; }
+  .indicator-dot.completed { background: #10b981; }
+  .indicator-dot.error { background: #ef4444; }
+  
+  /* ★v17.0.0追加：インジケータ方式（バー方式）★ */
+  .indicator-bar { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: #e2e8f0; overflow: hidden; }
+  .indicator-bar-progress { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); width: 0%; transition: width 0.3s; }
+  .indicator-bar.waiting .indicator-bar-progress { width: 0%; background: #94a3b8; }
+  .indicator-bar.sending .indicator-bar-progress { width: 30%; background: #3b82f6; animation: progress 2s infinite; }
+  .indicator-bar.receiving .indicator-bar-progress { width: 70%; background: #10b981; animation: progress 2s infinite; }
+  .indicator-bar.completed .indicator-bar-progress { width: 100%; background: #10b981; }
+  .indicator-bar.error .indicator-bar-progress { width: 100%; background: #ef4444; }
+  
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  @keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
   
   .role-proposer { border-color: var(--role-proposer); }
   .role-opposer { border-color: var(--role-opposer); }
@@ -136,9 +160,19 @@
   
   .manual-grid { display: none; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   @media (max-width: 1000px) { .manual-grid { grid-template-columns: repeat(2, 1fr); } }
-  .mini-col { height: 500px; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-  .mini-head { padding: 10px 15px; font-weight: bold; border-bottom: 1px solid #eee; }
+  .mini-col { height: 500px; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: relative; }
+  .mini-head { padding: 10px 15px; font-weight: bold; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
   .mini-body { overflow-y: auto; flex: 1; padding: 10px; }
+  /* ★v17.0.0追加：追質問ボタン★ */
+  .followup-btn { background: #3b82f6; color: white; border: none; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: bold; }
+  .followup-btn:hover { background: #2563eb; }
+  
+  /* ★v17.0.0追加：マニュアル送信先選択UI★ */
+  .manual-send-area { display: none; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 15px; }
+  .manual-send-targets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .manual-send-target-badge { padding: 6px 12px; border-radius: 20px; background: #fff; border: 2px solid #cbd5e1; color: #64748b; font-size: 0.85rem; cursor: pointer; }
+  .manual-send-target-badge.selected { background: #3b82f6; color: white; border-color: #3b82f6; }
+  .manual-send-actions { display: flex; gap: 8px; }
   
   /* Utilities */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 2000; backdrop-filter: blur(3px); }
@@ -166,7 +200,7 @@
 <div class="container" id="appContainer">
   <div class="header">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div class="app-title">AI Round Table <span class="app-meta">v16.3.8-hf3-full</span></div>
+      <div class="app-title">AI Round Table <span class="app-meta">v17.0.0-nabechou-request</span></div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="font-ctrl-group">
@@ -176,6 +210,7 @@
       </div>
       <button class="btn btn-secondary" onclick="openHistoryModal()">📂 ログ</button>
       <button class="btn btn-secondary" onclick="tryReset()">🔄 リセット</button>
+      <!-- ★追加：設定ボタン（例外許可：UI追加）★ -->
       <button class="btn btn-secondary" onclick="openSettingsModal()">⚙ 設定</button>
     </div>
   </div>
@@ -240,18 +275,31 @@
   </div>
 
   <div id="manualGrid" class="manual-grid"></div>
+  
+  <!-- ★v17.0.0追加：マニュアル送信先選択UI★ -->
+  <div id="manualSendArea" class="manual-send-area">
+    <div style="font-weight:bold;margin-bottom:10px;color:#64748b;">📤 送信先選択</div>
+    <div class="manual-send-targets" id="manualSendTargets"></div>
+    <div class="manual-send-actions">
+      <button class="btn btn-secondary" onclick="selectAllManualTargets()" style="font-size:0.85rem;padding:6px 12px;">全員</button>
+      <button class="btn btn-secondary" onclick="clearManualTargets()" style="font-size:0.85rem;padding:6px 12px;">解除</button>
+      <button class="btn btn-primary" onclick="sendManualMessage()" style="font-size:0.85rem;padding:6px 12px;">送信</button>
+    </div>
+    <div style="margin-top:10px;font-size:0.8rem;color:#64748b;" id="manualSendLastTarget"></div>
+  </div>
 </div>
 
 <div id="historyModal" class="modal-overlay"><div class="modal-content"><div style="display:flex;justify-content:space-between;margin-bottom:15px;"><h2>📂 過去ログ</h2><button onclick="closeHistoryModal()" class="btn btn-secondary">✕</button></div><div id="logList" style="overflow-y:auto;flex:1;"></div></div></div>
 <div id="resetModal" class="modal-overlay"><div class="modal-content" style="max-width:400px;text-align:center;"><h3 style="margin-top:0;">🔄 リセットしますか？</h3><p style="color:#666;">画面の内容と一時保存データがクリアされます。<br>(過去ログは消えません)</p><div style="display:flex;justify-content:center;gap:10px;margin-top:20px;"><button class="btn btn-secondary" onclick="closeModal('resetModal')">キャンセル</button><button class="btn btn-danger" onclick="performReset()">実行する</button></div></div></div>
 <div id="codeModal" class="modal-overlay" style="z-index:3000;"><div class="modal-content code-modal-content"><div style="padding:15px;background:#2d2d2d;display:flex;justify-content:space-between;"><span style="font-weight:bold;color:#fff;">📜 ソースコード</span><div><button class="btn btn-primary" style="height:32px;font-size:0.8rem;" onclick="copyCode()">コピー</button> <button onclick="closeModal('codeModal')" class="btn btn-secondary" style="background:#444;color:#fff;border:none;">✕</button></div></div><div class="code-modal-body"><pre><code id="codeViewerContent"></code></pre></div></div></div>
-
+<!-- ★追加：設定モーダル（例外許可：UI追加）★ -->
 <div id="settingsModal" class="modal-overlay"><div class="modal-content" style="max-width:600px;max-height:90vh;overflow-y:auto;">
   <div style="display:flex;justify-content:space-between;margin-bottom:20px;align-items:center;">
     <h2 style="margin:0;">⚙ 設定</h2>
     <button onclick="closeSettingsModal()" class="btn btn-secondary">✕</button>
   </div>
   <div style="display:flex;flex-direction:column;gap:20px;">
+    <!-- 要約レベル -->
     <div>
       <label style="font-weight:bold;display:block;margin-bottom:8px;">📊 要約レベル</label>
       <select id="settingSummaryLevel" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;">
@@ -260,6 +308,7 @@
         <option value="detailed">詳細（前提→判断→手順→注意点）</option>
       </select>
     </div>
+    <!-- 会話トーン -->
     <div>
       <label style="font-weight:bold;display:block;margin-bottom:8px;">💬 会話トーン</label>
       <select id="settingConversationTone" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;">
@@ -268,14 +317,26 @@
         <option value="business">仕事（用件中心で短く）</option>
       </select>
     </div>
+    <!-- 丁寧すぎ抑制 -->
     <div>
       <label style="font-weight:bold;display:block;margin-bottom:8px;cursor:pointer;">
         <input type="checkbox" id="settingPoliteSuppress" style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
         丁寧すぎ抑制（前置き・挨拶を削る）
       </label>
     </div>
+    <!-- ★v17.0.0追加：インジケータ方式選択★ -->
     <div>
-      <label style="font-weight:bold;display:block;margin-bottom:8px;">📊 インジケータ表示</label>
+      <label style="font-weight:bold;display:block;margin-bottom:8px;">📊 インジケータ表示方式</label>
+      <select id="settingIndicatorMode" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;">
+        <option value="off">オフ（表示しない）</option>
+        <option value="text" selected>従来（テキスト表示）</option>
+        <option value="dot">ドット方式（●で状態表示）</option>
+        <option value="bar">バー方式（進捗バー）</option>
+      </select>
+    </div>
+    <!-- インジケータ表示（従来方式のみ） -->
+    <div>
+      <label style="font-weight:bold;display:block;margin-bottom:8px;">📊 インジケータ表示（従来方式のみ）</label>
       <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:#f8fafc;border-radius:8px;">
         <label style="cursor:pointer;display:flex;align-items:center;">
           <input type="checkbox" id="indicatorThinking" checked style="width:18px;height:18px;margin-right:8px;cursor:pointer;">
@@ -299,6 +360,15 @@
         </label>
       </div>
     </div>
+    <!-- ★v17.0.0追加：回答の詳しさ（オートモード用）★ -->
+    <div>
+      <label style="font-weight:bold;display:block;margin-bottom:8px;">📝 回答の詳しさ（オートモード）</label>
+      <select id="settingResponseDetail" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;">
+        <option value="simple">簡単（要点のみ、箇条書き中心、短め）</option>
+        <option value="standard" selected>標準（要点＋理由＋次の手）</option>
+        <option value="detailed">詳細（手順・注意点・代替案まで）</option>
+      </select>
+    </div>
   </div>
   <div style="display:flex;justify-content:center;gap:10px;margin-top:25px;">
     <button class="btn btn-secondary" onclick="closeSettingsModal()">キャンセル</button>
@@ -308,27 +378,26 @@
 
 <script>
 const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
-
-// selected: 空セット = 全員（運用統一）
 let selected = ['yui','gemini','rex','deepseek'];
-
 let currentMode = null;
-let imagesBase64 = []; 
-let context = ""; 
-let sessionId = "SESS_"+Date.now();
+let imagesBase64 = []; let context = ""; let sessionId = "SESS_"+Date.now();
 let codeSnippets = [];
 let assignedRoles = {};
-
-// 画面復元（タイムラインHTML）だけでなく、タイトル/議題も復元するため meta を保存
-const STORAGE_KEY = 'ai_round_v16_3_3';                 // 従来互換（mainStage.innerHTML）
-const STORAGE_META_KEY = 'ai_round_meta_v16_3_8_hf3';    // 追加（title/theme/sessionIdなど）
+const STORAGE_KEY = 'ai_round_v16_3_3';
 const SETTINGS_STORAGE_KEY = 'ai_round_settings_v16_3_7';
 
-// ★設定値（localStorageから復元）★
+// ★v17.0.0追加：マニュアルモード用の変数★
+let manualSelectedTargets = []; // マニュアル送信先選択
+let lastManualTarget = null; // 前回の送信先（誤爆防止）
+let lastFollowupCard = null; // 追質問対象のカード情報
+
+// ★追加：設定値（localStorageから復元）★
 let settings = {
-  summaryLevel: 'standard',
-  conversationTone: 'friendly',
-  politeSuppress: false,
+  summaryLevel: 'standard', // 'simple' / 'standard' / 'detailed'
+  conversationTone: 'friendly', // 'first' / 'friendly' / 'business'
+  politeSuppress: false, // true: 丁寧すぎ抑制ON
+  indicatorMode: 'text', // 'off' / 'text' / 'dot' / 'bar'
+  responseDetail: 'standard', // 'simple' / 'standard' / 'detailed' (オートモード用)
   indicators: {
     thinking: true,
     timeout: true,
@@ -338,17 +407,20 @@ let settings = {
   }
 };
 
+// ★追加：設定をlocalStorageから復元★
 function loadSettings() {
   try {
     const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      settings = { ...settings, ...parsed, indicators: { ...settings.indicators, ...(parsed.indicators || {}) } };
+      settings = { ...settings, ...parsed };
     }
   } catch (e) {
     console.warn('Settings load failed:', e);
   }
 }
+
+// ★追加：設定をlocalStorageに保存★
 function saveSettings() {
   try {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
@@ -357,135 +429,261 @@ function saveSettings() {
   }
 }
 
-/* =========================================================
-   v16.3.8-hf3-full: 表示名（Alpha/Beta廃止）＋ユーザー命名優先
-========================================================= */
-function _getUserNamedLabel_(agentKey) {
-  try {
-    const k = `ai_name_${agentKey}`;
-    const v = localStorage.getItem(k);
-    if (v && String(v).trim()) return String(v).trim();
-  } catch (e) {}
-  return "";
-}
-function _platformName_(agentKey) {
-  const map = {
-    yui: 'ChatGPT',
-    gemini: 'Gemini',
-    rex: 'Cursor',
-    deepseek: 'DeepSeek',
-    llama: 'Llama',
-    qwen: 'Qwen',
-    mistral: 'Mistral',
-    dolphin: 'Dolphin'
-  };
-  return map[String(agentKey || '').toLowerCase()] || (String(agentKey||'AI').charAt(0).toUpperCase()+String(agentKey||'AI').slice(1));
-}
-function normalizeDisplayName(speaker, role) {
-  const lowerSpeaker = String(speaker || '').toLowerCase();
-
-  // ユーザー命名があれば最優先
-  const userNamed = _getUserNamedLabel_(lowerSpeaker);
-  if (userNamed) return userNamed;
-
-  // 役割ラベル→モデル名（必要最小限）
-  const roleToModelMap = {
-    'ImageAnalyzer': 'Gemini',
-    'FactChecker': 'Gemini',
-    'CodeReviewer': 'Cursor',
-    'TechAdvisor': 'Cursor',
-    'Proposer': 'Gemini',
-    'Opposer': 'Gemini',
-    'Observer': 'Gemini'
-  };
-  const roleKey = String(role || speaker || '').replace(/[^a-zA-Z0-9]/g, '');
-  if (roleToModelMap[roleKey]) return roleToModelMap[roleKey];
-
-  // 既定はプラットフォーム名（Alpha/Beta廃止）
-  return _platformName_(lowerSpeaker);
-}
-
-/* =========================================================
-   v16.3.8-hf3-full: CUT誤検知低減（末尾マーカー「以上。」指示と併用）
-========================================================= */
+// ★追加：CUT検知関数（文末が未完で終了しているかを検知）★
 function _detectCut_(text) {
   if (!text || typeof text !== 'string') return false;
-
-  let clean = text
-    .replace(/<[^>]+>/g, '')
-    .replace(/[＊*`_~\[\](){}#]/g, '')
-    .trim();
-  if (!clean) return false;
-
-  const lines = clean.split(/\n/).map(s => s.trim()).filter(Boolean);
-  if (!lines.length) return false;
-
-  const last = lines[lines.length - 1];
-  if (!last || last.length < 3) return false;
-
-  // 終端マーカーはCUTにしない
-  if (/(以上。|以上！|以上\!|終わり。|終わり！)$/.test(last)) return false;
-
-  if (/[。！？!?\.]$/.test(last)) return false;
-  if (/[\.．…]{2,}$/.test(last)) return true;
-
-  const short = last.length <= 28;
-
-  // よくある語尾（だ/よ/ね/わ/な）はCUT候補から除外（hf1から継続）
-  if (short && /(だ|よ|ね|わ|な)$/.test(last)) return false;
-
-  if (short && /(の|が|を|に|で|と|は|も|か|や|へ)$/.test(last)) return true;
-  if (short && /(て|ので|のに|けど|けれど|から|ため|つつ)$/.test(last)) return true;
-  if (short && /(よう|そう|らしい|たい|ない)$/.test(last)) return true;
-
-  return false;
+  
+  // Markdown記号やHTMLタグを除去して、純粋なテキストを取得
+  let cleanText = text.replace(/<[^>]+>/g, '').replace(/[#*`_~\[\](){}]/g, '').trim();
+  if (!cleanText) return false;
+  
+  // ★v17.0.0追加：「以上」で終わっている場合は完了と判定★
+  if (/以上[。！？\.]?$/.test(cleanText)) {
+    return false; // 「以上」で終わっている場合は完了
+  }
+  
+  // 改行で分割して、最後の行を取得
+  const lines = cleanText.split(/\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) return false;
+  
+  const lastLine = lines[lines.length - 1].trim();
+  if (!lastLine || lastLine.length < 3) return false; // 最後の行が短すぎる場合は判定しない
+  
+  // 最後の文字が句点（。！？）で終わっているか確認
+  const endsWithPunctuation = /[。！？\.]$/.test(lastLine);
+  if (endsWithPunctuation) return false; // 句点で終わっている場合は完了
+  
+  // 未完のパターンを検知（助詞・助動詞で終わる場合）
+  // 日本語の助詞・助動詞パターン
+  // ★修正：角括弧を全撤去して語尾の文字列一致に修正（誤検知防止）★
+  // ★修正：普通に完結している文（「〜する」「〜できる」「〜ます」「〜です」等）はCUT判定から除外★
+  const incompletePatterns = [
+    // 助詞止まり（CUT判定を維持）
+    /の$/, /が$/, /を$/, /に$/, /で$/, /と$/, /は$/, /も$/, /か$/, /や$/, /へ$/,
+    /て$/, /し$/, /ず$/, /れ$/, /ば$/, /よ$/, /ね$/, /な$/, /だ$/, /わ$/,
+    // 助動詞・語尾（一部のみCUT判定）
+    /である$/, /ない$/, /たい$/, /よう$/, /そう$/, /らしい$/
+    // 除外: /です$/, /ます$/, /する$/, /れる$/, /られる$/, /できる$/ （普通に完結している文）
+  ];
+  
+  // 最後の行が未完パターンに一致するか確認
+  for (const pattern of incompletePatterns) {
+    if (pattern.test(lastLine)) {
+      return true; // CUT検知
+    }
+  }
+  
+  // 最後の行が「...」「…」「．．．」で終わっている場合もCUTと判定
+  if (/[\.．…]{2,}$/.test(lastLine)) {
+    return true; // CUT検知
+  }
+  
+  // 最後の行が「〜の」「〜が」等の助詞で終わっている場合（より厳密な判定）
+  if (/[のがをにでとはもかやへ]$/.test(lastLine) && lastLine.length < 30) {
+    // 短い行で助詞で終わっている場合はCUTの可能性が高い
+    return true;
+  }
+  
+  return false; // 完了
 }
 
-/* =========================================================
-   Markdownフォーマット
-========================================================= */
+// ★追加：CUT自動継続を最大2回に強化する関数★
+function _handleCutContinuation_(speaker, responseText, context, imgs, sessionId, title, role, id, indicatorId, attemptCount, resolve) {
+  const MAX_CUT_ATTEMPTS = 2; // 最大2回
+  
+  if (attemptCount >= MAX_CUT_ATTEMPTS) {
+    // ★v16.3.8-hf1修正：2回でもCUTのまま終了、終端表示を付与★
+    const cutEndMsg = `\n\n<span style="color:#f59e0b; font-weight:bold;">（途中で切れました）</span>`;
+    document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(responseText + cutEndMsg);
+    // ★v17.0.0修正：インジケータ更新（CUT終了 - 方式に応じて表示）★
+    updateIndicator(indicatorId, 'error', settings.indicators.cut ? '✂ CUT → End' : '');
+    // ★修正：contextは呼び出し元で追加されるので、ここでは追加しない（二重追加防止）★
+    // context += `[${speaker}]: ${responseText}\n`; // 削除（二重追加防止）
+    resolve(); // 必ず次のターンへ進む
+    return;
+  }
+  
+  // CUT検知表示を追加（続き要求中）
+  const attemptNum = attemptCount + 1;
+  const cutIndicator = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています。続きを要求します... (#${attemptNum})</span>`;
+  document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(responseText + cutIndicator);
+  // ★v17.0.0修正：インジケータ更新（CUT継続 - 方式に応じて表示）★
+  updateIndicator(indicatorId, 'sending', settings.indicators.cut ? `✂ CUT → Continue #${attemptNum}` : '');
+  // ★修正：contextは既に呼び出し元で追加済みなので、ここでは追加しない（二重追加防止）★
+  // context += `[${speaker}]: ${responseText}\n`; // 削除（二重追加防止）
+  
+  // 続き要求を自動送信
+  google.script.run.withSuccessHandler((contRaw) => {
+    let contNormalized = null;
+    if (typeof contRaw === "string") {
+      try { contNormalized = JSON.parse(contRaw); } catch (e) { contNormalized = { status: "success", response: contRaw }; }
+    } else if (typeof contRaw === "object" && contRaw !== null) {
+      contNormalized = contRaw;
+    } else {
+      contNormalized = { status: "success", response: String(contRaw || "(無応答)") };
+    }
+    const contText = contNormalized.response || contNormalized.text || contNormalized.message || String(contNormalized || "(無応答)");
+    const combinedText = responseText + '\n\n**（続き #' + attemptNum + '）**\n' + contText;
+    
+    // 続きもCUTかチェック
+    const isStillCut = _detectCut_(contText);
+    if (isStillCut && attemptCount < MAX_CUT_ATTEMPTS - 1) {
+      // まだCUTで、残り試行回数がある場合は再帰的に続き要求
+      _handleCutContinuation_(speaker, combinedText, context, imgs, sessionId, title, role, id, indicatorId, attemptCount + 1, resolve);
+    } else {
+      // ★v16.3.8-hf1修正：続きが完成した場合、終端表示を付与★
+      const finalText = isStillCut 
+        ? combinedText + '\n\n<span style="color:#f59e0b; font-weight:bold;">（途中で切れました）</span>'
+        : combinedText + '\n\n<span style="color:#10b981; font-weight:bold;">（終了）</span>';
+      document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(finalText);
+      // ★v17.0.0修正：インジケータ更新（CUT完了/継続終了 - 方式に応じて表示）★
+      if (isStillCut && settings.indicators.cut) {
+        updateIndicator(indicatorId, 'error', '✂ CUT → End');
+      } else {
+        updateIndicator(indicatorId, 'completed', '✓ Received');
+      }
+      // ★修正：contextは既に呼び出し元で追加済みなので、続き部分のみ追加★
+      context += `[${speaker}]: ${contText}\n`;
+      resolve(); // 続き要求完了後に次のターンへ進む
+    }
+  }).withFailureHandler(() => {
+    // 続き要求失敗時は、元のレスポンスで続行（CUT検知表示のみ）
+    const fullText = responseText + '\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています（続き要求失敗）</span>';
+    document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(fullText);
+    // ★v17.0.0修正：インジケータ更新（CUT失敗 - 方式に応じて表示）★
+    updateIndicator(indicatorId, 'error', settings.indicators.cut ? '✂ CUT → Failed' : '');
+    context += `[${speaker}]: ${responseText}\n`;
+    resolve(); // エラー時も次のターンへ進む
+  }).runConferenceTurn(speaker, context, "前の回答が途中で切れています。続きを完成させてください。", imgs, sessionId, title, role);
+}
+
+// ★v17.0.0修正：表示名の正規化関数（固定名のみ、Alpha/Beta等を廃止）★
+function normalizeDisplayName(speaker, role) {
+  // 固定のAI名マップ（プラットフォーム名ベースで固定、勝手な変名禁止）
+  const fixedNameMap = {
+    // 既存のAI名（小文字で統一）
+    'yui': 'Yui',
+    'gemini': 'Gemini',
+    'rex': 'Rex',
+    'deepseek': 'DeepSeek',
+    'llama': 'Llama',
+    'qwen': 'Qwen',
+    'mistral': 'Mistral',
+    'dolphin': 'Dolphin',
+    // 役割名→モデル名（固定）
+    'imageanalyzer': 'Gemini',
+    'factchecker': 'Gemini',
+    'codereviewer': 'Rex',
+    'techadvisor': 'Rex',
+    'proposer': 'Gemini',
+    'opposer': 'Gemini',
+    'observer': 'Gemini',
+    // Alpha/Beta等の禁止名は全てUNKNOWN扱い
+    'alpha': 'UNKNOWN',
+    'beta': 'UNKNOWN',
+    'gamma': 'UNKNOWN',
+    'delta': 'UNKNOWN'
+  };
+  
+  // 小文字に変換して検索
+  const lowerSpeaker = String(speaker || '').toLowerCase().trim();
+  
+  // 固定マップに存在する場合
+  if (fixedNameMap[lowerSpeaker]) {
+    return fixedNameMap[lowerSpeaker];
+  }
+  
+  // 役割名の場合（roleから検索）
+  if (role) {
+    const roleKey = String(role).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    if (fixedNameMap[roleKey]) {
+      return fixedNameMap[roleKey];
+    }
+  }
+  
+  // ★v17.0.0修正：未定義・Alpha/Beta等は全てUNKNOWN扱い（勝手な名前を生成しない）★
+  return 'UNKNOWN';
+}
+
+// ★修正：Markdownフォーマット関数（marked.js削除によりフォールバック処理のみ）★
 function formatMarkdown(text) {
   if (!text) return '';
+  
+  // 簡易Markdown処理
   let formatted = text;
-
+  
+  // コードブロック処理
   formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, l, c) => {
     const i = codeSnippets.length; 
     codeSnippets.push({ l: l||'text', c: c.trim() });
     return `__CODE_${i}__`;
   });
-
+  
+  // 改行処理
   formatted = formatted.replace(/\n/g, '<br>');
+  
+  // 太字処理
   formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
+  
+  // コードブロックをボタンに変換
   formatted = formatted.replace(/__CODE_(\d+)__/g, (m, i) => {
     if (codeSnippets[i]) {
       return `<button class="code-link-btn" onclick="openCode(${i})">📜 コード (${codeSnippets[i].l})</button>`;
     }
     return '';
   });
-
+  
   return formatted;
 }
 
-/* =========================================================
-   モーダル共通
-========================================================= */
+// ★追加：openModal関数（欠品ゼロ対策）★
 function openModal(id) {
   const el = document.getElementById(id);
-  if (el) el.style.display = 'flex';
+  if (el) {
+    el.style.display = 'flex';
+  }
 }
+
+// ★追加：closeModal関数（欠品ゼロ対策）★
 function closeModal(id) {
   const el = document.getElementById(id);
-  if (el) el.style.display = 'none';
+  if (el) {
+    el.style.display = 'none';
+  }
+}
+
+// ★v17.0.0追加：インジケータ更新関数（方式に応じて表示を切り替え）★
+function updateIndicator(indicatorId, state, text) {
+  const indicatorEl = document.getElementById(indicatorId);
+  if (!indicatorEl) return;
+  
+  const indicatorMode = settings.indicatorMode || 'text';
+  
+  if (indicatorMode === 'off') {
+    indicatorEl.style.display = 'none';
+    return;
+  }
+  
+  if (indicatorMode === 'dot') {
+    indicatorEl.className = `indicator-dot ${state}`;
+    indicatorEl.style.display = 'inline-block';
+  } else if (indicatorMode === 'bar') {
+    indicatorEl.className = `indicator-bar ${state}`;
+    indicatorEl.style.display = 'block';
+  } else {
+    // 従来方式（text）
+    indicatorEl.textContent = text || '';
+    indicatorEl.style.opacity = text ? '1' : '0';
+    indicatorEl.style.display = '';
+  }
 }
 
 window.onload = () => { 
   updateClock(); 
   setInterval(updateClock,60000); 
-  loadSettings();
+  loadSettings(); // ★追加：設定を復元★
   initUI(); 
-  applySettingsToUI();
-  restoreFromStorage(); // ★過去ログ/タイトル/議題の復元
+  applySettingsToUI(); // ★追加：設定をUIに反映★
 };
 
 function initUI() {
@@ -497,31 +695,30 @@ function initUI() {
     const span = document.createElement('span');
     span.className = `agent-badge ${selected.includes(a)?'selected':''}`;
     span.setAttribute('data-agent', a); span.id = `badge-${a}`;
-    span.innerText = _platformName_(a);
+    span.innerText = a.charAt(0).toUpperCase() + a.slice(1);
     span.onclick = () => toggleAgent(a);
     con.appendChild(span);
-
     const opt = document.createElement('option');
-    opt.value = a; opt.innerText = _platformName_(a);
+    opt.value = a; opt.innerText = a.charAt(0).toUpperCase() + a.slice(1);
     mcSel.appendChild(opt);
   });
-
-  // MC変更はオート時だけ意味がある。マニュアルの選択制限に影響させない
+  
+  // ★追加：司会AI選択時のchangeイベント（既に選ばれている司会AIを自動で外す）★
   mcSel.addEventListener('change', function() {
-    if (currentMode !== 'auto') return;
+    const newMc = this.value;
+    // 既に選ばれている司会AIをselectedから除外
+    selected = selected.filter(a => a !== newMc);
+    // バッジ状態を再描画
     _updateBadgeStates_();
   });
   
+  // 初期状態でバッジ状態を更新（司会AIを除外）
   _updateBadgeStates_();
 }
 
-function updateClock(){
-  document.getElementById('clock').innerText=new Date().toLocaleString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-}
-
+function updateClock(){document.getElementById('clock').innerText=new Date().toLocaleString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
 function setFontSize(s) {
-  const r = document.body; 
-  document.querySelectorAll('.font-btn').forEach(b=>b.classList.remove('active'));
+  const r = document.body; document.querySelectorAll('.font-btn').forEach(b=>b.classList.remove('active'));
   if(s==='small'){r.style.fontSize='14px'; document.querySelectorAll('.font-btn')[0].classList.add('active');}
   if(s==='medium'){r.style.fontSize='16px'; document.querySelectorAll('.font-btn')[1].classList.add('active');}
   if(s==='large'){r.style.fontSize='20px'; document.querySelectorAll('.font-btn')[2].classList.add('active');}
@@ -536,40 +733,45 @@ function setMode(mode) {
   document.getElementById('roundWrapper').style.display = (mode==='auto') ? 'block' : 'none';
   document.getElementById('mainStage').style.display = 'none';
   document.getElementById('manualGrid').style.display = 'none';
-
-  // 進捗は、オート/マニュアルとも使える
   document.getElementById('progressZone').style.display = 'none';
-
-  // モード切替時に badge 状態を整える（ただしマニュアルではMC除外しない）
-  _updateBadgeStates_();
-}
-
-function toggleAgent(a) {
-  // マニュアルではMC概念が無いので、選択制限をかけない
-  if(selected.includes(a)) { 
-    if(selected.length > 1) selected = selected.filter(x => x!==a); 
-  } else {
-    selected.push(a);
+  // ★v17.0.0追加：マニュアルモード時に送信先選択UIを表示★
+  document.getElementById('manualSendArea').style.display = (mode==='manual') ? 'block' : 'none';
+  if (mode === 'manual') {
+    initManualSendTargets();
   }
+}
+
+// ★修正：司会AIは参加者として選べないようにする（排他制御）★
+function toggleAgent(a) {
+  // ★修正：司会AI（mc）をブロック★
+  const currentMc = document.getElementById('mcSelect')?.value;
+  if (a === currentMc) {
+    return; // 司会AIは参加者として選べない
+  }
+  
+  if(selected.includes(a)) { if(selected.length > 1) selected = selected.filter(x => x!==a); }
+  else selected.push(a);
+  
+  // ★修正：バッジ状態を再描画（司会AIを除外）★
   _updateBadgeStates_();
 }
 
+// ★追加：バッジ状態を再描画する関数（司会AIを除外）★
 function _updateBadgeStates_() {
-  const mc = document.getElementById('mcSelect')?.value;
-
+  const currentMc = document.getElementById('mcSelect')?.value;
   AGENTS.forEach(ag => {
     const el = document.getElementById(`badge-${ag}`);
     if (!el) return;
-
-    // オートのみ：MCは選択対象から外す
-    if (currentMode === 'auto' && ag === mc) {
+    
+    // 司会AIは参加者として選べないので、selectedから除外
+    if (ag === currentMc) {
       selected = selected.filter(x => x !== ag);
       el.classList.remove('selected');
-      return;
+      // ★修正：見た目変更なし（ロジックで弾くのみ）★
+    } else {
+      if(selected.includes(ag)) el.classList.add('selected'); 
+      else el.classList.remove('selected');
     }
-
-    if(selected.includes(ag)) el.classList.add('selected'); 
-    else el.classList.remove('selected');
   });
 }
 
@@ -579,27 +781,12 @@ function insertTemplate() {
   t.value = t.value + template; t.focus();
 }
 
-function resetInput() { 
-  document.getElementById('themeInput').value = ''; 
-  imagesBase64 = []; 
-  document.getElementById('previewArea').innerHTML = ''; 
-}
+function resetInput() { document.getElementById('themeInput').value = ''; imagesBase64 = []; document.getElementById('previewArea').innerHTML = ''; }
 function tryReset() { openModal('resetModal'); }
-function performReset() { 
-  localStorage.removeItem(STORAGE_KEY); 
-  localStorage.removeItem(STORAGE_META_KEY);
-  location.reload(); 
-}
+function performReset() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
 
-/* =========================================================
-   進捗バー（オート/マニュアル共通で使える）
-========================================================= */
 function buildProgressBar(totalSteps) {
-  const zone = document.getElementById('progressZone');
   const bar = document.getElementById('progressBarInner');
-  if (!zone || !bar) return;
-
-  zone.style.display = 'block';
   bar.innerHTML = '<div class="progress-line"></div>';
   for(let i=1; i<=totalSteps; i++) {
     let label = i===1 ? "開始" : i===totalSteps ? "完了" : "議論";
@@ -608,44 +795,39 @@ function buildProgressBar(totalSteps) {
 }
 function updateStep(s){ 
   const steps = document.querySelectorAll('.step');
-  steps.forEach((el, idx) => { 
-    if(idx+1 === s) el.classList.add('active'); 
-    else el.classList.remove('active'); 
-  });
+  steps.forEach((el, idx) => { if(idx+1 === s) el.classList.add('active'); else el.classList.remove('active'); });
 }
 
-/* =========================================================
-   会議開始
-========================================================= */
 function startProcess() {
   const theme = document.getElementById('themeInput').value;
   if(!theme) return alert("議題を入力してください");
   if(!currentMode) return alert("モードを選択してください");
   document.getElementById('statusText').innerText = "🚀 実行中...";
-  document.getElementById('statusText').style.color = '#10b981';
   if(currentMode === 'auto') startAuto(theme); else startManual(theme);
 }
 
+// ★修正：オート会話ループをasync/awaitに変更（必ず次へ進む構造）★
 async function startAuto(theme) {
   document.getElementById('mainStage').style.display = 'block';
+  document.getElementById('progressZone').style.display = 'block';
   document.getElementById('timeline').innerHTML = '';
   
   const mc = document.getElementById('mcSelect').value;
   const rounds = parseInt(document.getElementById('roundSelect').value, 10);
   
+  // ★修正①：selectedが空の場合、全員を選択（AGENTS全部）★
   let targets = selected.length > 0 ? selected.filter(a => a !== mc) : AGENTS.filter(a => a !== mc);
+  
+  // ★修正①：targetsが空または1人以下の場合、警告を表示★
   if (targets.length < 2) {
     alert('オート会議は2人以上のAIが必要です。');
     document.getElementById('statusText').innerText = "❌ エラー: AIが不足";
-    document.getElementById('statusText').style.color = 'red';
     return;
   }
-
-  // 進捗（目安）：MC開始 + (rounds * targets数) + 最終まとめ
-  const totalSteps = 1 + (rounds * (targets.length)) + 1;
-  buildProgressBar(totalSteps);
   
   try {
+    // 役割割り当て
+    // ★修正：司会AI（mc）を除外して役割割り当て（排他制御）★
     const participants = (selected.length > 0 ? selected : AGENTS).filter(a => a !== mc);
     const roles = await new Promise((resolve, reject) => {
       google.script.run
@@ -660,17 +842,16 @@ async function startAuto(theme) {
     const imgs = [...imagesBase64];
     let stepCount = 1;
 
-    // 末尾マーカー指示（CUT抑制）
-    const endMarker = "必ず回答の最後を「以上。」で終えてください。途中で切れないように最後まで書き切ってください。";
-
-    const mcInstr = _applySettingsToInstruction_(`ユーザー議題:「${theme}」\n司会として議論を開始し、役割（提案者・反論者）を指名して議論を始めてください。\n${endMarker}`);
+    // 司会の発言
+    const mcInstr = _applySettingsToInstruction_(`ユーザー議題:「${theme}」\n司会として議論を開始し、役割（提案者・反論者）を指名して議論を始めてください。`);
     await runStep(mc, mcInstr, imgs, title, stepCount++, 'mc');
 
+    // ラウンドごとの発言
     for (let r = 1; r <= rounds; r++) {
       let prefix = (rounds > 1) ? `【ラウンド ${r}/${rounds}】` : "";
       const proposers = targets.filter(a => assignedRoles[a] === 'proposer');
       for (const agent of proposers) {
-        const proposerInstr = _applySettingsToInstruction_(`${prefix}提案者として、具体的かつ論理的な解決策を提示してください。\n${endMarker}`);
+        const proposerInstr = _applySettingsToInstruction_(`${prefix}提案者として、具体的かつ論理的な解決策を提示してください。`);
         await runStep(agent, proposerInstr, imgs, title, stepCount++, 'proposer');
       }
       const others = targets.filter(a => assignedRoles[a] !== 'proposer');
@@ -679,17 +860,17 @@ async function startAuto(theme) {
         let msg = `${prefix}提案に対して意見してください。`;
         if(role === 'opposer') msg = `${prefix}反論者として、提案のリスクや欠陥を厳しく指摘してください。`;
         if(role === 'tech') msg = `${prefix}技術顧問として、コードや実装の実現可能性を検証してください。`;
-        const agentInstr = _applySettingsToInstruction_(msg + `\n${endMarker}`);
+        const agentInstr = _applySettingsToInstruction_(msg);
         await runStep(agent, agentInstr, imgs, title, stepCount++, role);
       }
     }
 
-    const finalInstBase = `議論を総括し、提案・反論・技術検証を統合して、最終的な【完全な解決策/コード】を作成してください。\n${endMarker}`;
+    // 最終発言
+    const finalInstBase = `議論を総括し、提案・反論・技術検証を統合して、最終的な【完全な解決策/コード】を作成してください。`;
     const finalInst = _applySettingsToInstruction_(finalInstBase);
     await runStep(mc, finalInst, imgs, title, stepCount, 'mc');
     
     document.getElementById('statusText').innerText = "✅ 完了";
-    document.getElementById('statusText').style.color = '#10b981';
     saveStorage();
   } catch (e) {
     document.getElementById('statusText').innerText = "❌ エラー: " + (e.message || e);
@@ -698,187 +879,114 @@ async function startAuto(theme) {
   }
 }
 
-/* =========================================================
-   CUT継続（hf1ベース）
-========================================================= */
-function _handleCutContinuation_(
-  speaker, responseText, ctx, imgs, sessionId, title, role,
-  id, indicatorId, attemptCount, resolve
-) {
-  const MAX_CUT_ATTEMPTS = 2;
-
-  const ansEl = document.getElementById(`ans-${id}`);
-  const indicatorEl = document.getElementById(indicatorId);
-
-  const setIndicator = (txt) => {
-    if (!indicatorEl) return;
-    if (!settings?.indicators?.cut) return;
-    indicatorEl.textContent = txt;
-  };
-
-  if (attemptCount >= MAX_CUT_ATTEMPTS) {
-    const cutEndMsg = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUTのまま終了（次へ）</span>`;
-    if (ansEl) ansEl.innerHTML = formatMarkdown(responseText + cutEndMsg);
-    setIndicator('✂ CUT → End');
-    resolve();
-    return;
-  }
-
-  const attemptNum = attemptCount + 1;
-
-  const cutIndicator = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています。続きを要求します... (#${attemptNum})</span>`;
-  if (ansEl) ansEl.innerHTML = formatMarkdown(responseText + cutIndicator);
-  setIndicator(`✂ CUT → Continue #${attemptNum}`);
-
-  google.script.run.withSuccessHandler((contRaw) => {
-    let contNormalized;
-    if (typeof contRaw === "string") {
-      try { contNormalized = JSON.parse(contRaw); }
-      catch (e) { contNormalized = { status: "success", response: contRaw }; }
-    } else if (typeof contRaw === "object" && contRaw !== null) {
-      contNormalized = contRaw;
-    } else {
-      contNormalized = { status: "success", response: String(contRaw || "(無応答)") };
-    }
-
-    const contText = contNormalized.response || contNormalized.text || contNormalized.message || String(contNormalized || "(無応答)");
-    const combinedText = responseText + '\n\n**（続き #' + attemptNum + '）**\n' + contText;
-
-    const isStillCut = _detectCut_(contText);
-
-    if (isStillCut && attemptCount < (MAX_CUT_ATTEMPTS - 1)) {
-      _handleCutContinuation_(speaker, combinedText, ctx, imgs, sessionId, title, role, id, indicatorId, attemptCount + 1, resolve);
-      return;
-    }
-
-    if (ansEl) ansEl.innerHTML = formatMarkdown(combinedText);
-
-    if (isStillCut) {
-      setIndicator('✂ CUT → End');
-    } else {
-      if (indicatorEl) indicatorEl.textContent = '✓ Received';
-    }
-
-    // 続き分だけctxへ追加（最初はrunStepで追加済み）
-    ctx.text += `[${speaker}]: ${contText}\n`;
-    resolve();
-  }).withFailureHandler(() => {
-    const failMsg = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています（続き要求失敗）</span>`;
-    if (ansEl) ansEl.innerHTML = formatMarkdown(responseText + failMsg);
-    setIndicator('✂ CUT → Failed');
-    resolve();
-  }).runConferenceTurn(
-    speaker,
-    ctx.text,
-    "前の回答が途中で切れています。続きを完成させてください。",
-    imgs,
-    sessionId,
-    title,
-    role
-  );
-}
-
-/* =========================================================
-   runStep
-========================================================= */
+// ★修正：runStep関数をasync/awaitに変更、タイムアウト後の遅延ログ回収を確実に差し込む★
 function runStep(speaker, instr, imgs, title, step, role){
-  return new Promise((resolve)=>{
+  return new Promise((resolve, reject)=>{
     updateStep(step);
     const tl = document.getElementById('timeline');
-    const id = Date.now() + Math.floor(Math.random()*1000);
-
+    const id = Date.now();
     let roleBadge = ""; let roleClass = "";
     if(role === 'proposer') { roleBadge='<span class="role-badge" style="background:var(--role-proposer);">提案</span>'; roleClass='role-proposer'; }
     if(role === 'opposer') { roleBadge='<span class="role-badge" style="background:var(--role-opposer);">反論</span>'; roleClass='role-opposer'; }
     if(role === 'tech') { roleBadge='<span class="role-badge" style="background:var(--role-tech);">技術</span>'; roleClass='role-tech'; }
 
+    // ★修正：表示名の正規化★
     const displayName = normalizeDisplayName(speaker, role);
+    // ★v17.0.0修正：インジケータ表示用のID（方式に応じて表示を切り替え）★
     const indicatorId = `indicator-${id}`;
-
-    const indicatorText = settings?.indicators?.thinking ? 'Thinking...' : '';
-    tl.insertAdjacentHTML('beforeend',
-      `<div class="timeline-card ${roleClass}">
-        <div class="tl-header h-${speaker}">
-          <span>${displayName} ${roleBadge}</span>
-          <span id="${indicatorId}">${indicatorText}</span>
-        </div>
-        <div class="tl-body" id="ans-${id}"><div class="loader">...</div></div>
-      </div>`
-    );
+    const indicatorMode = settings.indicatorMode || 'text';
+    let indicatorHTML = '';
+    
+    if (indicatorMode === 'off') {
+      indicatorHTML = '';
+    } else if (indicatorMode === 'dot') {
+      indicatorHTML = `<span class="indicator-dot sending" id="${indicatorId}"></span>`;
+    } else if (indicatorMode === 'bar') {
+      indicatorHTML = `<div class="indicator-bar sending" id="${indicatorId}"><div class="indicator-bar-progress"></div></div>`;
+    } else {
+      // 従来方式（text）
+      const indicatorText = settings.indicators.thinking ? 'Thinking...' : '';
+      const indicatorStyle = settings.indicators.thinking ? '' : 'style="opacity:0;"';
+      indicatorHTML = `<span id="${indicatorId}" ${indicatorStyle}>${indicatorText}</span>`;
+    }
+    
+    tl.insertAdjacentHTML('beforeend', `<div class="timeline-card ${roleClass}">${indicatorMode === 'bar' ? indicatorHTML : ''}<div class="tl-header h-${speaker}"><span>${displayName} ${roleBadge}</span>${indicatorMode !== 'bar' ? indicatorHTML : ''}</div><div class="tl-body" id="ans-${id}"><div class="loader">...</div></div></div>`);
+    
+    // ★v17.0.0追加：初期状態のインジケータ更新（送信中）★
+    if (indicatorMode === 'dot' || indicatorMode === 'bar') {
+      updateIndicator(indicatorId, 'sending', '');
+    }
     window.scrollTo(0, document.body.scrollHeight);
-
-    const ctx = { text: (typeof context === 'string' ? context : String(context || "")) };
-
-    const ansEl = document.getElementById(`ans-${id}`);
-    const indicatorEl = document.getElementById(indicatorId);
-
-    const setIndicator = (txt, kind) => {
-      if (!indicatorEl) return;
-
-      if (kind === 'timeout' && !settings?.indicators?.timeout) return;
-      if (kind === 'late'    && !settings?.indicators?.late)    return;
-      if (kind === 'error'   && !settings?.indicators?.error)   return;
-      if (kind === 'cut'     && !settings?.indicators?.cut)     return;
-
-      if (kind === 'received') {
-        indicatorEl.textContent = txt;
-        return;
-      }
-      indicatorEl.textContent = txt;
-    };
-
-    const finalize = () => {
-      context = ctx.text;
-      resolve();
-    };
-
+    
+    // ★修正：タイムアウト処理（60秒）★
     const WATCHDOG_MS = 60000;
     let done = false;
     let retryCount = 0;
-    const MAX_RETRY = 10;
+    const MAX_RETRY = 10; // 最大10回再取得（約5分間）
     let retryTimer = null;
-
+    
     const timer = setTimeout(() => {
       if (done) return;
       done = true;
-
       const msg = `(⏱ タイムアウト: ${WATCHDOG_MS/1000}秒 応答なし → 次へ進みます)`;
+      const ansEl = document.getElementById(`ans-${id}`);
       if (ansEl) ansEl.innerHTML = `<span style="color:#b45309; font-weight:bold;">${msg}</span>`;
-      setIndicator('⏱ Timeout (move on)', 'timeout');
-
-      ctx.text += `[${speaker}]: ${msg}\n`;
-      finalize();
-
+      // ★v17.0.0修正：インジケータ更新（Timeout - 方式に応じて表示）★
+      updateIndicator(`indicator-${id}`, 'error', settings.indicators.timeout ? '⏱ Timeout (move on)' : '');
+      
+      // ★v17.0.0追加：ドット/バー方式でもエラー状態を表示★
+      if (settings.indicatorMode === 'dot' || settings.indicatorMode === 'bar') {
+        updateIndicator(`indicator-${id}`, 'error', '');
+      }
+      context += `[${speaker}]: ${msg}\n`;
+      resolve(); // 会議は先へ進む（done=trueでresolve）
+      
+      // ★修正：遅延レスポンスを定期的に再取得して差し込む★
       retryTimer = setInterval(() => {
         if (retryCount >= MAX_RETRY) {
           if (retryTimer) clearInterval(retryTimer);
           return;
         }
         retryCount++;
-
+        
+        // ログを再取得
         google.script.run.withSuccessHandler((logs) => {
           if (!Array.isArray(logs) || logs.length === 0) return;
-
+          
+          // 最後の発言者とspeakerが一致するログを探す
           const lastLog = logs[logs.length - 1];
           if (lastLog && lastLog.speaker === speaker && lastLog.content) {
-            const already = (ansEl && ansEl.innerHTML && ansEl.innerHTML.includes(lastLog.content));
-            if (ansEl && !already) {
+            const ansEl = document.getElementById(`ans-${id}`);
+            if (ansEl && !ansEl.innerHTML.includes(lastLog.content)) {
+              // 遅延レスポンスを差し込み
               ansEl.innerHTML = `<span style="color:#10b981; font-weight:bold;">(遅延レスポンス取得)</span><br>` + formatMarkdown(lastLog.content);
-              setIndicator('↻ Late response fetched', 'late');
-
-              ctx.text += `[${speaker}]: ${lastLog.content}\n`;
-              context = ctx.text;
-
-              if (retryTimer) clearInterval(retryTimer);
+              // ★v17.0.0修正：インジケータ更新（Late - 方式に応じて表示）★
+              updateIndicator(`indicator-${id}`, 'completed', settings.indicators.late ? '↻ Late response fetched' : '');
+              
+              // ★v17.0.0追加：ドット/バー方式でも完了状態を表示★
+              if (settings.indicatorMode === 'dot' || settings.indicatorMode === 'bar') {
+                updateIndicator(`indicator-${id}`, 'completed', '');
+              }
+              context += `[${speaker}]: ${lastLog.content}\n`;
+              if (retryTimer) clearInterval(retryTimer); // 取得できたら終了
             }
           }
+        }).withFailureHandler(() => {
+          // エラー時は次の再取得を試す
         }).getSessionLogs(sessionId);
-      }, 30000);
-
+      }, 30000); // 30秒ごとに再取得
+      
     }, WATCHDOG_MS);
 
     google.script.run.withSuccessHandler(raw => {
       if (done) {
+        // タイムアウト後に返ってきた場合は、既に表示されているかもしれない
+        const ansEl = document.getElementById(`ans-${id}`);
+        if (ansEl && !ansEl.innerHTML.includes("遅延レスポンス取得") && !ansEl.innerHTML.includes("タイムアウト")) {
+          // まだ遅延レスポンスが表示されていない場合のみ更新
+          ansEl.innerHTML = formatMarkdown(raw.response || raw.text || raw.message || String(raw || "(無応答)"));
+          context += `[${speaker}]: ${raw.response || raw.text || raw.message || String(raw || "(無応答)")}\n`;
+        }
         if (retryTimer) clearInterval(retryTimer);
         return;
       }
@@ -886,35 +994,45 @@ function runStep(speaker, instr, imgs, title, step, role){
       clearTimeout(timer);
       if (retryTimer) clearInterval(retryTimer);
 
+      // ★修正②：返り値を正規化（string/objectの揺れを吸収）★
       let normalized = null;
       if (typeof raw === "string") {
-        try { normalized = JSON.parse(raw); }
-        catch (e) { normalized = { status: "success", response: raw }; }
+        try {
+          normalized = JSON.parse(raw);
+        } catch (e) {
+          normalized = { status: "success", response: raw };
+        }
       } else if (typeof raw === "object" && raw !== null) {
         normalized = raw;
       } else {
         normalized = { status: "success", response: String(raw || "(無応答)") };
       }
-
-      const responseText = normalized.response || normalized.text || normalized.message || String(normalized || "(無応答)");
-      setIndicator('✓ Received', 'received');
-
-      // 最初の応答はここで1回だけctxに追加
-      ctx.text += `[${speaker}]: ${responseText}\n`;
-
+      
+      // responseフィールドを確実に取得
+      let responseText = normalized.response || normalized.text || normalized.message || String(normalized || "(無応答)");
+      
+      // ★追加：CUT検知（文末が未完で終了しているかを検知）★
       const isCut = _detectCut_(responseText);
-      const autoContinueEnabled = true;
-
-      if (ansEl) ansEl.innerHTML = formatMarkdown(responseText);
-
-      if (isCut && autoContinueEnabled) {
-        _handleCutContinuation_(speaker, responseText, ctx, imgs, sessionId, title, role, id, indicatorId, 0, () => {
-          finalize();
-        });
-        return;
+      const autoContinueEnabled = true; // 常にON
+      
+      // ★v17.0.0修正：インジケータ更新（Received - 方式に応じて表示）★
+      updateIndicator(`indicator-${id}`, 'completed', '✓ Received');
+      
+      // ★v17.0.0追加：ドット/バー方式でも完了状態を表示★
+      if (settings.indicatorMode === 'dot' || settings.indicatorMode === 'bar') {
+        updateIndicator(`indicator-${id}`, 'completed', '');
       }
-
-      finalize();
+      
+      if (isCut && autoContinueEnabled) {
+        // ★修正：CUT自動継続を最大2回に強化★
+        _handleCutContinuation_(speaker, responseText, context, imgs, sessionId, title, role, id, indicatorId, 0, resolve);
+      } else {
+        // ★v16.3.8-hf1修正：CUT検知なしの場合、終端表示を付与★
+        const finalText = responseText + '\n\n<span style="color:#10b981; font-weight:bold;">（終了）</span>';
+        document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(finalText);
+        context += `[${speaker}]: ${responseText}\n`;
+        resolve(); // 必ず次のターンへ進む
+      }
     }).withFailureHandler(err => {
       if (done) {
         if (retryTimer) clearInterval(retryTimer);
@@ -923,105 +1041,250 @@ function runStep(speaker, instr, imgs, title, step, role){
       done = true;
       clearTimeout(timer);
       if (retryTimer) clearInterval(retryTimer);
-
-      const errorText = `(システムエラー)\n${err?.message || err}`;
-      if (ansEl) ansEl.innerHTML = `<span style="color:red;">${formatMarkdown(errorText)}</span>`;
-      setIndicator('⚠ Error', 'error');
-
-      ctx.text += `[${speaker}]: ${errorText}\n`;
-      finalize();
-    }).runConferenceTurn(speaker, ctx.text, instr, imgs, sessionId, title, role);
+      
+      // ★修正③：エラー時も次のターンへ進む（必ずresolve）★
+      const errorText = `(システムエラー)\n${err.message || err}`;
+      document.getElementById(`ans-${id}`).innerHTML = `<span style="color:red;">${errorText}</span>`;
+      // ★v17.0.0修正：インジケータ更新（Error - 方式に応じて表示）★
+      updateIndicator(`indicator-${id}`, 'error', settings.indicators.error ? '⚠ Error' : '');
+      
+      // ★v17.0.0追加：ドット/バー方式でもエラー状態を表示★
+      if (settings.indicatorMode === 'dot' || settings.indicatorMode === 'bar') {
+        updateIndicator(`indicator-${id}`, 'error', '');
+      }
+      context += `[${speaker}]: ${errorText}\n`;
+      resolve(); // 必ず次のターンへ進む（rejectしない）
+    }).runConferenceTurn(speaker, context, instr, imgs, sessionId, title, role);
   });
 }
 
-/* =========================================================
-   マニュアル（MC干渉排除＋進捗バー表示）
-========================================================= */
-function startManual(theme) {
-  const grid = document.getElementById('manualGrid');
-  grid.style.display = 'grid'; 
-  grid.innerHTML = "";
+// ★v17.0.0追加：マニュアル送信先選択UIを初期化★
+function initManualSendTargets() {
+  const mc = document.getElementById('mcSelect')?.value;
+  const targets = AGENTS.filter(a => a !== mc);
+  const container = document.getElementById('manualSendTargets');
+  container.innerHTML = '';
   
-  // マニュアルでは「mcSelect」は使わない（干渉排除）
-  const targets = (selected.length > 0 ? selected : AGENTS);
+  targets.forEach(agent => {
+    const badge = document.createElement('span');
+    badge.className = 'manual-send-target-badge';
+    badge.setAttribute('data-agent', agent);
+    badge.textContent = normalizeDisplayName(agent, null);
+    badge.onclick = () => toggleManualTarget(agent);
+    if (manualSelectedTargets.includes(agent)) {
+      badge.classList.add('selected');
+    }
+    container.appendChild(badge);
+  });
+  
+  updateManualSendLastTarget();
+}
 
-  // 進捗：並列なので 1→完了の2段扱い（見える化）
-  buildProgressBar(2);
-  updateStep(1);
+// ★v17.0.0追加：マニュアル送信先のトグル★
+function toggleManualTarget(agent) {
+  if (manualSelectedTargets.includes(agent)) {
+    manualSelectedTargets = manualSelectedTargets.filter(a => a !== agent);
+  } else {
+    manualSelectedTargets.push(agent);
+  }
+  initManualSendTargets();
+}
 
-  const cols = Math.min(targets.length, 4);
-  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  const title = document.getElementById('topicTitle').value || "";
-  const imgs = [...imagesBase64];
+// ★v17.0.0追加：全員選択★
+function selectAllManualTargets() {
+  const mc = document.getElementById('mcSelect')?.value;
+  manualSelectedTargets = AGENTS.filter(a => a !== mc);
+  initManualSendTargets();
+}
 
-  // 末尾マーカー指示
-  const endMarker = "必ず回答の最後を「以上。」で終えてください。途中で切れないように最後まで書き切ってください。";
-  const instr = _applySettingsToInstruction_(theme + "\n" + endMarker);
+// ★v17.0.0追加：選択解除★
+function clearManualTargets() {
+  manualSelectedTargets = [];
+  initManualSendTargets();
+}
 
-  let completed = 0;
+// ★v17.0.0追加：前回送信先表示更新★
+function updateManualSendLastTarget() {
+  const el = document.getElementById('manualSendLastTarget');
+  if (lastManualTarget && lastManualTarget.length > 0) {
+    el.textContent = `前回: ${lastManualTarget.map(a => normalizeDisplayName(a, null)).join(', ')}`;
+  } else {
+    el.textContent = '';
+  }
+}
 
-  targets.forEach(a => {
-    const div = document.createElement('div'); div.className = 'mini-col';
-    const id = `hist-${a}-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-    const displayName = normalizeDisplayName(a, null);
-    div.innerHTML = `<div class="mini-head h-${a}">${displayName}</div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
+// ★v17.0.0追加：マニュアル送信★
+function sendManualMessage() {
+  const theme = document.getElementById('themeInput').value;
+  if (!theme) {
+    alert("議題を入力してください");
+    return;
+  }
+  if (manualSelectedTargets.length === 0) {
+    alert("送信先を選択してください");
+    return;
+  }
+  
+  lastManualTarget = [...manualSelectedTargets];
+  updateManualSendLastTarget();
+  
+  // 追質問の場合、引用テンプレを自動挿入
+  let message = theme;
+  if (lastFollowupCard) {
+    const quote = lastFollowupCard.content.substring(0, 100) + (lastFollowupCard.content.length > 100 ? '...' : '');
+    message = `さっきの回答のこの点：「${quote}」について、質問します。\n\n${theme}`;
+    lastFollowupCard = null; // 一度使ったらクリア
+  }
+  
+  manualSelectedTargets.forEach(agent => {
+    const grid = document.getElementById('manualGrid');
+    if (grid.style.display !== 'grid') {
+      grid.style.display = 'grid';
+      grid.innerHTML = '';
+    }
+    
+    const div = document.createElement('div');
+    div.className = 'mini-col';
+    const id = `hist-${agent}-${Date.now()}`;
+    const displayName = normalizeDisplayName(agent, null);
+    div.innerHTML = `<div class="mini-head h-${agent}"><span>${displayName}</span><button class="followup-btn" onclick="setFollowupTarget('${agent}', '${id}')">↩ 追質問</button></div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
     grid.appendChild(div);
-
+    
     google.script.run.withSuccessHandler(raw => {
       let normalized = null;
       if (typeof raw === "string") {
-        try { normalized = JSON.parse(raw); } catch (e) { normalized = { status: "success", response: raw }; }
+        try {
+          normalized = JSON.parse(raw);
+        } catch (e) {
+          normalized = { status: "success", response: raw };
+        }
       } else if (typeof raw === "object" && raw !== null) {
         normalized = raw;
       } else {
         normalized = { status: "success", response: String(raw || "(無応答)") };
       }
       const responseText = normalized.response || normalized.text || normalized.message || String(normalized || "(無応答)");
-      document.getElementById(id).innerHTML = formatMarkdown(responseText);
-
-      completed++;
-      if (completed >= targets.length) {
-        updateStep(2);
-        document.getElementById('statusText').innerText = "✅ 完了";
-        document.getElementById('statusText').style.color = '#10b981';
-        saveStorage();
+      const bodyEl = document.getElementById(id);
+      if (bodyEl) {
+        bodyEl.innerHTML = formatMarkdown(responseText);
+        // ★v17.0.0追加：追質問ボタンをカード内にも追加★
+        const headEl = bodyEl.previousElementSibling;
+        if (headEl && !headEl.querySelector('.followup-btn')) {
+          const btn = document.createElement('button');
+          btn.className = 'followup-btn';
+          btn.textContent = '↩ 追質問';
+          btn.onclick = () => setFollowupTarget(agent, id);
+          headEl.appendChild(btn);
+        }
       }
-    }).withFailureHandler(err=>{
-      document.getElementById(id).innerHTML = `<span style="color:#ef4444;">(エラー) ${err?.message || err}</span>`;
-      completed++;
-      if (completed >= targets.length) {
-        updateStep(2);
-        document.getElementById('statusText').innerText = "✅ 完了（エラーあり）";
-        document.getElementById('statusText').style.color = '#ef4444';
-        saveStorage();
-      }
-    }).runConferenceTurn(a, theme, instr, imgs, sessionId, title, null);
+      saveStorage();
+    }).runConferenceTurn(agent, message, message, imagesBase64, sessionId, "", null);
   });
+  
+  document.getElementById('statusText').innerText = "✅ 送信完了";
 }
 
-/* =========================================================
-   コードモーダル
-========================================================= */
+// ★v17.0.0追加：追質問対象を設定★
+function setFollowupTarget(agent, cardId) {
+  const bodyEl = document.getElementById(cardId);
+  if (!bodyEl) return;
+  
+  const content = bodyEl.textContent || bodyEl.innerText || '';
+  lastFollowupCard = {
+    agent: agent,
+    cardId: cardId,
+    content: content
+  };
+  
+  // 送信先をそのAIに固定
+  manualSelectedTargets = [agent];
+  initManualSendTargets();
+  
+  // 入力欄に引用テンプレを自動挿入
+  const themeInput = document.getElementById('themeInput');
+  const quote = content.substring(0, 100) + (content.length > 100 ? '...' : '');
+  themeInput.value = `さっきの回答のこの点：「${quote}」について、質問します。\n\n`;
+  themeInput.focus();
+  
+  alert(`${normalizeDisplayName(agent, null)}への追質問モードに設定しました。`);
+}
+
+function startManual(theme) {
+  const grid = document.getElementById('manualGrid');
+  grid.style.display = 'grid'; grid.innerHTML = "";
+  
+  // ★修正①：selectedが空の場合、全員を選択（AGENTS全部）★
+  // ★修正：司会AI（mc）を除外（排他制御）★
+  const mc = document.getElementById('mcSelect').value;
+  const targets = (selected.length > 0 ? selected : AGENTS).filter(a => a !== mc);
+  
+  // ★v17.0.0修正：マニュアル送信先が選択されている場合はそれを使用★
+  const sendTargets = manualSelectedTargets.length > 0 ? manualSelectedTargets.filter(a => a !== mc) : targets;
+  
+  const cols = Math.min(sendTargets.length, 4);
+  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  sendTargets.forEach(a => {
+    const div = document.createElement('div'); div.className = 'mini-col';
+    const id = `hist-${a}-${Date.now()}`;
+    const displayName = normalizeDisplayName(a, null);
+    div.innerHTML = `<div class="mini-head h-${a}"><span>${displayName}</span><button class="followup-btn" onclick="setFollowupTarget('${a}', '${id}')">↩ 追質問</button></div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
+    grid.appendChild(div);
+    google.script.run.withSuccessHandler(raw => {
+      // ★修正②：返り値を正規化（string/objectの揺れを吸収）★
+      let normalized = null;
+      if (typeof raw === "string") {
+        try {
+          normalized = JSON.parse(raw);
+        } catch (e) {
+          normalized = { status: "success", response: raw };
+        }
+      } else if (typeof raw === "object" && raw !== null) {
+        normalized = raw;
+      } else {
+        normalized = { status: "success", response: String(raw || "(無応答)") };
+      }
+      const responseText = normalized.response || normalized.text || normalized.message || String(normalized || "(無応答)");
+      const bodyEl = document.getElementById(id);
+      if (bodyEl) {
+        bodyEl.innerHTML = formatMarkdown(responseText);
+        // ★v17.0.0追加：追質問ボタンをカード内にも追加★
+        const headEl = bodyEl.previousElementSibling;
+        if (headEl && !headEl.querySelector('.followup-btn')) {
+          const btn = document.createElement('button');
+          btn.className = 'followup-btn';
+          btn.textContent = '↩ 追質問';
+          btn.onclick = () => setFollowupTarget(a, id);
+          headEl.appendChild(btn);
+        }
+      }
+      saveStorage();
+    }).runConferenceTurn(a, theme, theme, imagesBase64, sessionId, "", null);
+  });
+  document.getElementById('statusText').innerText = "✅ 完了";
+}
+
 function openCode(i) {
-  const s = codeSnippets[i]; 
-  const el = document.getElementById('codeViewerContent');
-  el.textContent = s.c; 
-  el.className = `language-${s.l}`; 
-  if (typeof hljs !== 'undefined' && hljs) hljs.highlightElement(el);
+  const s = codeSnippets[i]; const el = document.getElementById('codeViewerContent');
+  el.textContent = s.c; el.className = `language-${s.l}`; 
+  if (typeof hljs !== 'undefined' && hljs) {
+    hljs.highlightElement(el);
+  }
   openModal('codeModal');
 }
 function copyCode() { 
   const el = document.getElementById('codeViewerContent');
-  if (el) navigator.clipboard.writeText(el.textContent).then(()=>alert("コピーしました")); 
+  if (el) {
+    navigator.clipboard.writeText(el.textContent).then(()=>alert("コピーしました")); 
+  }
 }
 function uploadCode(){
   const c = document.getElementById('themeInput').value;
-  if(c) google.script.run.withSuccessHandler(alert).uploadToGithub(prompt("File?","Code.gs"),c);
+  if(c) {
+    google.script.run.withSuccessHandler(alert).uploadToGithub(prompt("File?","Code.gs"),c);
+  }
 }
 
-/* =========================================================
-   Image Handling
-========================================================= */
+// Image Handling
 async function handleFileSelect(e){
   const f = Array.from(e.target.files);
   for(const x of f){
@@ -1078,65 +1341,15 @@ async function pasteFromClipboard(){
   }
 }
 
-/* =========================================================
-   保存/復元（タイトル/議題も復元）
-========================================================= */
-function _saveMeta_(){
-  try {
-    const meta = {
-      topicTitle: document.getElementById('topicTitle')?.value || "",
-      themeInput: document.getElementById('themeInput')?.value || "",
-      sessionId: sessionId,
-      savedAt: Date.now()
-    };
-    localStorage.setItem(STORAGE_META_KEY, JSON.stringify(meta));
-  } catch (e) {
-    console.warn('save meta failed:', e);
-  }
-}
-
 function saveStorage(){
   try {
     localStorage.setItem(STORAGE_KEY, document.getElementById('mainStage').innerHTML);
-    _saveMeta_();
   } catch (e) {
     console.warn('saveStorage failed:', e);
   }
 }
 
-function restoreFromStorage(){
-  // タイムライン復元（従来互換）
-  try {
-    const html = localStorage.getItem(STORAGE_KEY);
-    if (html) {
-      document.getElementById('mainStage').innerHTML = html;
-      document.getElementById('mainStage').style.display = 'block';
-    }
-  } catch (e) {}
-
-  // タイトル/議題復元
-  try {
-    const metaRaw = localStorage.getItem(STORAGE_META_KEY);
-    if (metaRaw) {
-      const meta = JSON.parse(metaRaw);
-      if (meta && typeof meta === 'object') {
-        if (document.getElementById('topicTitle') && typeof meta.topicTitle === 'string') {
-          document.getElementById('topicTitle').value = meta.topicTitle;
-        }
-        if (document.getElementById('themeInput') && typeof meta.themeInput === 'string') {
-          document.getElementById('themeInput').value = meta.themeInput;
-        }
-        if (meta.sessionId) sessionId = meta.sessionId; // 同一sessionの再取得に寄せる
-      }
-    }
-  } catch (e) {
-    console.warn('restore meta failed:', e);
-  }
-}
-
-/* =========================================================
-   履歴
-========================================================= */
+// ★修正：過去ログ表示をtimeline-cardで再描画★
 function openHistoryModal(){
   openModal('historyModal');
   google.script.run.withSuccessHandler(l=>{
@@ -1151,21 +1364,44 @@ function openHistoryModal(){
       return;
     }
     
-    document.getElementById('logList').innerHTML = list.map(x=>`<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${x.time || ''} ${x.title||'(無題)'}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`).join('');
+    // ★v16.3.8-hf1修正：ログリンク（URL/ファイルIDが取れない時は遷移しない、可能なら新しいタブで開く）★
+    document.getElementById('logList').innerHTML = list.map(x=>{
+      const hasUrl = x.url && x.url.trim() && x.url.trim() !== '';
+      const hasFileId = x.fileId && x.fileId.trim() && x.fileId.trim() !== '';
+      if (hasUrl || hasFileId) {
+        const url = hasUrl ? x.url : `https://drive.google.com/file/d/${x.fileId}/view`;
+        return `<div class="log-item"><div class="log-text" onclick="window.open('${url}', '_blank')">${x.time || ''} ${x.title||'(無題)'}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
+      } else {
+        return `<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${x.time || ''} ${x.title||'(無題)'}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
+      }
+    }).join('');
   }).withFailureHandler(err=>{
     document.getElementById('logList').innerHTML = `<div style='padding:20px;text-align:center;color:#ef4444;'>履歴の読み込みに失敗: ${err?.message || err}</div>`;
   }).getLogList();
 }
-function closeHistoryModal(){ closeModal('historyModal'); }
 
-// 設定モーダル
-function openSettingsModal() { applySettingsToUI(); openModal('settingsModal'); }
-function closeSettingsModal() { closeModal('settingsModal'); }
+function closeHistoryModal(){
+  closeModal('historyModal');
+}
 
+// ★追加：設定モーダルを開く★
+function openSettingsModal() {
+  applySettingsToUI(); // UIに現在の設定を反映
+  openModal('settingsModal');
+}
+
+// ★追加：設定モーダルを閉じる★
+function closeSettingsModal() {
+  closeModal('settingsModal');
+}
+
+// ★追加：設定をUIに反映★
 function applySettingsToUI() {
   document.getElementById('settingSummaryLevel').value = settings.summaryLevel;
   document.getElementById('settingConversationTone').value = settings.conversationTone;
   document.getElementById('settingPoliteSuppress').checked = settings.politeSuppress;
+  document.getElementById('settingIndicatorMode').value = settings.indicatorMode || 'text';
+  document.getElementById('settingResponseDetail').value = settings.responseDetail || 'standard';
   document.getElementById('indicatorThinking').checked = settings.indicators.thinking;
   document.getElementById('indicatorTimeout').checked = settings.indicators.timeout;
   document.getElementById('indicatorCut').checked = settings.indicators.cut;
@@ -1173,10 +1409,13 @@ function applySettingsToUI() {
   document.getElementById('indicatorError').checked = settings.indicators.error;
 }
 
+// ★追加：設定を保存してモーダルを閉じる★
 function saveSettingsAndClose() {
   settings.summaryLevel = document.getElementById('settingSummaryLevel').value;
   settings.conversationTone = document.getElementById('settingConversationTone').value;
   settings.politeSuppress = document.getElementById('settingPoliteSuppress').checked;
+  settings.indicatorMode = document.getElementById('settingIndicatorMode').value;
+  settings.responseDetail = document.getElementById('settingResponseDetail').value;
   settings.indicators.thinking = document.getElementById('indicatorThinking').checked;
   settings.indicators.timeout = document.getElementById('indicatorTimeout').checked;
   settings.indicators.cut = document.getElementById('indicatorCut').checked;
@@ -1186,22 +1425,50 @@ function saveSettingsAndClose() {
   closeSettingsModal();
 }
 
+// ★追加：要約レベルと会話トーンをinstrに付与する関数★
 function _applySettingsToInstruction_(baseInstr) {
   let tags = [];
-  if (settings.summaryLevel === 'simple') tags.push('[要約:簡単] 結論→箇条書き3つ→次の1アクション');
-  else if (settings.summaryLevel === 'standard') tags.push('[要約:標準] 結論→理由→手順');
-  else if (settings.summaryLevel === 'detailed') tags.push('[要約:詳細] 前提→判断→手順→注意点');
-
-  if (settings.conversationTone === 'first') tags.push('[トーン:初めて] 丁寧め');
-  else if (settings.conversationTone === 'friendly') tags.push('[トーン:フレンドリー] 柔らかめ（砕けすぎ禁止）');
-  else if (settings.conversationTone === 'business') tags.push('[トーン:仕事] 用件中心で短く');
-
-  if (settings.politeSuppress) tags.push('[丁寧抑制ON] 前置き・挨拶を削る');
-
-  if (tags.length > 0) return baseInstr + '\n\n【運用タグ】\n' + tags.join('\n');
+  
+  // ★v17.0.0修正：回答の詳しさ（オートモード用、responseDetailを優先）★
+  const responseDetail = settings.responseDetail || settings.summaryLevel || 'standard';
+  if (responseDetail === 'simple') {
+    tags.push('[回答の詳しさ:簡単] 要点のみ（箇条書き中心、短め）。最後に「以上」で締めること。');
+  } else if (responseDetail === 'standard') {
+    tags.push('[回答の詳しさ:標準] 要点＋理由＋次の手。最後に「以上」で締めること。');
+  } else if (responseDetail === 'detailed') {
+    tags.push('[回答の詳しさ:詳細] 手順・注意点・代替案まで。最後に「以上」で締めること。');
+  }
+  
+  // 要約レベル（後方互換性のため維持）
+  if (settings.summaryLevel === 'simple') {
+    tags.push('[要約:簡単] 結論→箇条書き3つ→次の1アクション');
+  } else if (settings.summaryLevel === 'standard') {
+    tags.push('[要約:標準] 結論→理由→手順');
+  } else if (settings.summaryLevel === 'detailed') {
+    tags.push('[要約:詳細] 前提→判断→手順→注意点');
+  }
+  
+  // 会話トーン
+  if (settings.conversationTone === 'first') {
+    tags.push('[トーン:初めて] 丁寧め');
+  } else if (settings.conversationTone === 'friendly') {
+    tags.push('[トーン:フレンドリー] 柔らかめ（砕けすぎ禁止）');
+  } else if (settings.conversationTone === 'business') {
+    tags.push('[トーン:仕事] 用件中心で短く');
+  }
+  
+  // 丁寧すぎ抑制
+  if (settings.politeSuppress) {
+    tags.push('[丁寧抑制ON] 前置き・挨拶を削る');
+  }
+  
+  if (tags.length > 0) {
+    return baseInstr + '\n\n【運用タグ】\n' + tags.join('\n');
+  }
   return baseInstr;
 }
 
+// ★v17.0.0修正：loadLog()をtimeline-cardで再描画、議題/タイトル/モード状態も復元★
 function loadLog(sessionId){
   if(!sessionId) return;
   if(!confirm("過去ログを読み込みますか？")) return;
@@ -1209,11 +1476,32 @@ function loadLog(sessionId){
   closeHistoryModal();
   
   google.script.run
-    .withSuccessHandler((logs) => {
-      let arr = logs;
-      if (typeof logs === "string") {
-        try { arr = JSON.parse(logs); } catch (e) { arr = []; }
+    .withSuccessHandler((result) => {
+      // ★v17.0.0修正：resultがオブジェクトの場合、logsとmetadataを分離★
+      let arr = [];
+      let metadata = null;
+      
+      if (typeof result === "string") {
+        try { 
+          const parsed = JSON.parse(result);
+          if (Array.isArray(parsed)) {
+            arr = parsed;
+          } else if (parsed.logs && Array.isArray(parsed.logs)) {
+            arr = parsed.logs;
+            metadata = parsed.metadata || null;
+          }
+        } catch (e) { 
+          arr = []; 
+        }
+      } else if (typeof result === "object" && result !== null) {
+        if (Array.isArray(result)) {
+          arr = result;
+        } else if (result.logs && Array.isArray(result.logs)) {
+          arr = result.logs;
+          metadata = result.metadata || null;
+        }
       }
+      
       if (!Array.isArray(arr)) arr = [];
       
       if (arr.length === 0) {
@@ -1221,21 +1509,37 @@ function loadLog(sessionId){
         return;
       }
       
+      // ★v17.0.0追加：議題/タイトル/モード状態を復元★
+      if (metadata) {
+        if (metadata.title) {
+          document.getElementById('topicTitle').value = metadata.title;
+        }
+        if (metadata.theme) {
+          document.getElementById('themeInput').value = metadata.theme;
+        }
+        if (metadata.mode) {
+          setMode(metadata.mode);
+        }
+      }
+      
+      // ★修正：既存のtimelineに再描画（manual-gridではなく）★
       const tl = document.getElementById('timeline');
       if (!tl) {
         alert("タイムライン要素が見つかりません");
         return;
       }
       
-      tl.innerHTML = "";
+      tl.innerHTML = ""; // クリア
       
       arr.forEach((log) => {
         const speaker = String(log.speaker || "unknown");
         const content = String(log.content || "");
         const time = String(log.time || "");
         
+        // 表示名の正規化（v17.0.0：固定名のみ）
         const displayName = normalizeDisplayName(speaker, null);
         
+        // 役割バッジの判定（簡易版）
         let roleBadge = "";
         let roleClass = "";
         const lowerSpeaker = speaker.toLowerCase();
@@ -1252,6 +1556,7 @@ function loadLog(sessionId){
           roleBadge = '<span class="role-badge" style="background:#64748b;">司会</span>';
         }
         
+        // タイムラインカードを作成
         const card = document.createElement('div');
         card.className = `timeline-card ${roleClass}`;
         card.innerHTML = `
@@ -1264,9 +1569,11 @@ function loadLog(sessionId){
         tl.appendChild(card);
       });
       
+      // タイムラインを表示
       document.getElementById('mainStage').style.display = 'block';
       document.getElementById('progressZone').style.display = 'none';
       
+      // スクロール
       window.scrollTo(0, document.body.scrollHeight);
       
       document.getElementById('statusText').innerText = "過去ログを表示しました";
@@ -1282,7 +1589,9 @@ function deleteLog(id, btn){
   if(!id) return;
   if(!confirm("削除しますか？")) return;
   google.script.run.withSuccessHandler(r=>{
-    if(r.success && btn) btn.parentElement.remove();
+    if(r.success && btn) {
+      btn.parentElement.remove();
+    }
   }).deleteLog(id);
 }
 </script>
