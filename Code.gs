@@ -1,21 +1,22 @@
 /**
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
- * VERSION: v16.3.3-timeout-fix
- * DATE(JST): 2026-01-09 16:59 JST
- * TITLE: タイムアウト差し込み・表示名正規化・過去ログ復元
+ * VERSION: v17.0.4-btnfix3
+ * DATE(JST): 2026-01-20 14:25:30 JST
+ * TITLE: ボタン全滅（onclickが親フレームで評価される問題の対策）
  * CHANGES:
- * - getSessionLogs()を改善（タイムスタンプ順ソート、最後の司会ログが必ず取得できるように）
- * - 既存UI/文言/レイアウト/機能は変更なし（動作のみ修正）
- * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-09_1659_timeout-fix
+ * - [v17.0.3-btnfix2] doGetでHtmlOutputを作り直さず、evaluate()の出力にsetContentで反映（sandbox設定を保持）
+ * - [v17.0.3-btnfix2] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
+ * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
+ * AUTHOR: Yui（patch） / BASE: Rex
+ * BUILD_PARAM: ?b=2026-01-20_142530_btnfix3
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
-const APP_VERSION = "v16.3.3-timeout-fix";
-const BUILD_ID    = "2026-01-09_1659_timeout-fix";
-const AUTHOR      = "Rex";
+const APP_VERSION = "v17.0.4-btnfix3";
+const BUILD_ID = "2026-01-20_142530_btnfix3";
+const AUTHOR = "Yui";
 
 const SP = PropertiesService.getScriptProperties();
 const GEMINI_API_KEY = SP.getProperty("GEMINI_API_KEY") || "";
@@ -39,15 +40,29 @@ function doGet(e) {
     const evaluated = template.evaluate();
     let html = evaluated.getContent();
 
+    // 重要: evaluate() で作った HtmlOutput を作り直さず、そのまま返す（sandbox設定を保持）
+    var out = evaluated;
+
     if (debug) {
       html = _injectBeforeBodyEnd_(html, _debugBannerHtml_(b));
       html = _injectBeforeBodyEnd_(html, _blankWatchdogJs_());
+
+      if (typeof out.setContent === "function") {
+        out.setContent(html);
+      } else {
+        out = HtmlService.createHtmlOutput(html);
+      }
     }
 
-    return HtmlService.createHtmlOutput(html)
-      .setTitle(`${APP_NAME} ${APP_VERSION}`)
+    if (typeof out.setSandboxMode === "function") {
+      out.setSandboxMode(HtmlService.SandboxMode.IFRAME);
+    }
+
+    out.setTitle(`${APP_NAME} ${APP_VERSION}`)
       .addMetaTag("viewport", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no")
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+
+    return out;
 
   } catch (err) {
     console.error("doGet fatal:", err && err.stack ? err.stack : err);

@@ -1,10 +1,13 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.1-hotfix
-  DATE(JST): 2026-01-15 21:30 JST
-  TITLE: onclick関数公開の確実化（Object.assign即時実行・全関数網羅確認）
+  VERSION: v17.0.4-btnfix3
+  DATE(JST): 2026-01-17 14:39
+  TITLE: ボタン全滅の復旧（GAS sandbox/返却方式の修正）
   CHANGES:
+  - 【v17.0.4-btnfix3】GAS側のdoGetを修正：HtmlOutputを再生成せずに返す（sandbox/実行環境を保持）
+  - 【v17.0.4-btnfix3】sandbox(IFRAME)を明示して、ES6の解析エラーを防止
+  - 【v17.0.2-btnfix】onclick/window公開・未定義チェックは維持
   - 【v17.0.0】インジケータ2種追加: ドット方式（●で状態表示）・バー方式（進捗バー）を実装、設定から方式選択可能
   - 【v17.0.0】オートモード：発言量を「簡単/標準/詳細」で切り替え（既存のsummaryLevelを活用、プロンプト末尾に明確に反映）
   - 【v17.0.0】マニュアルモード：追質問機能を実装（カードに追質問ボタン追加、送信先自動固定、引用テンプレ自動挿入）
@@ -13,8 +16,8 @@
   - 【v17.0.0】過去ログ復元：議題/タイトル/モード状態も復元（セッション復元時に完全に戻る）
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
-  AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-15_2001_nabechou-request
+  AUTHOR: Yui（patch） / BASE: Rex
+  BUILD_PARAM: ?b=2026-01-17_1439_btnfix2
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -23,7 +26,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Round Table v17.0.1-hotfix</title>
+<title>AI Round Table v17.0.4-btnfix3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -200,7 +203,7 @@
 <div class="container" id="appContainer">
   <div class="header">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div class="app-title">AI Round Table <span class="app-meta">v17.0.0-nabechou-request-final-fix</span></div>
+      <div class="app-title">AI Round Table <span class="app-meta">v17.0.4-btnfix3</span></div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="font-ctrl-group">
@@ -416,6 +419,10 @@
 </div></div>
 
 <script>
+  // --- BOOT MARKER (Yui patch) ---
+  window.__AI_ROOM_VERSION__ = 'v17.0.4-btnfix3';
+  window.__AI_ROOM_BUILD__ = '2026-01-20_142530_btnfix3';
+  // -------------------------------
 const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
 let selected = ['yui','gemini','rex','deepseek'];
 let currentMode = null;
@@ -1709,50 +1716,58 @@ function deleteLog(id, btn){
   }).deleteLog(id);
 }
 
-// ★v17.0.0-fix: onclick用の関数をwindowに公開（GAS環境での動作保証）★
-Object.assign(window, {
-  // フォント・UI操作
-  setFontSize,
-  updateClock,
-  // モード・設定
-  setMode,
-  openSettingsModal,
-  closeSettingsModal,
-  saveSettingsAndClose,
-  applySettingsToUI,
-  // 入力・ファイル操作
-  insertTemplate,
-  resetInput,
-  pasteFromClipboard,
-  handleFileSelect,
-  uploadCode,
-  // 会議・送信
-  startProcess,
-  startAuto,
-  startManual,
-  sendManualMessage,
-  selectAllManualTargets,
-  clearManualTargets,
-  toggleManualTarget,
-  setFollowupTarget,
-  // モーダル操作
-  openModal,
-  closeModal,
-  openHistoryModal,
-  closeHistoryModal,
-  // リセット
-  tryReset,
-  performReset,
-  // ログ操作
-  loadLog,
-  deleteLog,
-  // コード表示
-  openCode,
-  copyCode,
-  // その他
-  toggleAgent,
-  updateStep
-});
+// ★v17.0.4-btnfix3: onclickが親フレーム側で評価されても動くように、window/parent/topへ安全に公開★
+(function(){
+  const exported = {};
+  // ※typeof 未宣言でも安全（ReferenceErrorにならない）
+  if (typeof setFontSize === 'function') exported.setFontSize = setFontSize;
+  if (typeof updateClock === 'function') exported.updateClock = updateClock;
+  if (typeof setMode === 'function') exported.setMode = setMode;
+  if (typeof openSettingsModal === 'function') exported.openSettingsModal = openSettingsModal;
+  if (typeof closeSettingsModal === 'function') exported.closeSettingsModal = closeSettingsModal;
+  if (typeof saveSettingsAndClose === 'function') exported.saveSettingsAndClose = saveSettingsAndClose;
+  if (typeof applySettingsToUI === 'function') exported.applySettingsToUI = applySettingsToUI;
+  if (typeof insertTemplate === 'function') exported.insertTemplate = insertTemplate;
+  if (typeof resetInput === 'function') exported.resetInput = resetInput;
+  if (typeof pasteFromClipboard === 'function') exported.pasteFromClipboard = pasteFromClipboard;
+  if (typeof handleFileSelect === 'function') exported.handleFileSelect = handleFileSelect;
+  if (typeof uploadCode === 'function') exported.uploadCode = uploadCode;
+  if (typeof startProcess === 'function') exported.startProcess = startProcess;
+  if (typeof startAuto === 'function') exported.startAuto = startAuto;
+  if (typeof startManual === 'function') exported.startManual = startManual;
+  if (typeof sendManualMessage === 'function') exported.sendManualMessage = sendManualMessage;
+  if (typeof selectAllManualTargets === 'function') exported.selectAllManualTargets = selectAllManualTargets;
+  if (typeof clearManualTargets === 'function') exported.clearManualTargets = clearManualTargets;
+  if (typeof toggleManualTarget === 'function') exported.toggleManualTarget = toggleManualTarget;
+  if (typeof setFollowupTarget === 'function') exported.setFollowupTarget = setFollowupTarget;
+  if (typeof openModal === 'function') exported.openModal = openModal;
+  if (typeof closeModal === 'function') exported.closeModal = closeModal;
+  if (typeof openHistoryModal === 'function') exported.openHistoryModal = openHistoryModal;
+  if (typeof closeHistoryModal === 'function') exported.closeHistoryModal = closeHistoryModal;
+  if (typeof tryReset === 'function') exported.tryReset = tryReset;
+  if (typeof performReset === 'function') exported.performReset = performReset;
+  if (typeof loadLog === 'function') exported.loadLog = loadLog;
+  if (typeof deleteLog === 'function') exported.deleteLog = deleteLog;
+  if (typeof openCode === 'function') exported.openCode = openCode;
+  if (typeof copyCode === 'function') exported.copyCode = copyCode;
+
+  function exposeTo(target){
+    if (!target) return;
+    try {
+      Object.keys(exported).forEach(k => {
+        try { target[k] = exported[k]; } catch(e) {}
+      });
+    } catch(e) {}
+  }
+
+  // 同一フレーム
+  exposeTo(window);
+  // 親/最上位（GASのラッパー側でonclickが評価されるケース対策）
+  try { if (window.parent && window.parent !== window) exposeTo(window.parent); } catch(e) {}
+  try { if (window.top && window.top !== window) exposeTo(window.top); } catch(e) {}
+
+  window.__AI_ROOM_EXPOSED__ = Object.keys(exported);
+})();
 
 // ★v17.0.0-fix: エラーハンドリング（画面内デバッグ欄への出力）★
 (function() {
