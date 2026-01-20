@@ -2,21 +2,23 @@
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
  * VERSION: v17.0.4-btnfix3
- * DATE(JST): 2026-01-20 14:25:30 JST
- * TITLE: ボタン全滅（onclickが親フレームで評価される問題の対策）
+ * DATE(JST): 2026-01-20 23:26:43 JST
+ * SERIAL: 2026-01-20_232643_airoom-btndead
+ * TITLE: ボタン全滅（onclick属性をremoveしてaddEventListenerで付け直す方式）
  * CHANGES:
+ * - [v17.0.4-btnfix3] onclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ・最小で強い）
  * - [v17.0.3-btnfix2] doGetでHtmlOutputを作り直さず、evaluate()の出力にsetContentで反映（sandbox設定を保持）
  * - [v17.0.3-btnfix2] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
- * AUTHOR: Yui（patch） / BASE: Rex
- * BUILD_PARAM: ?b=2026-01-20_142530_btnfix3
+ * AUTHOR: Rex
+ * BUILD_PARAM: ?b=2026-01-20_223800_airoom-btndead
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
 const APP_VERSION = "v17.0.4-btnfix3";
-const BUILD_ID = "2026-01-20_142530_btnfix3";
-const AUTHOR = "Yui";
+const BUILD_ID = "2026-01-20_232643_airoom-btndead";
+const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();
 const GEMINI_API_KEY = SP.getProperty("GEMINI_API_KEY") || "";

@@ -2,12 +2,15 @@
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
   VERSION: v17.0.4-btnfix3
-  DATE(JST): 2026-01-17 14:39
-  TITLE: ボタン全滅の復旧（GAS sandbox/返却方式の修正）
+  DATE(JST): 2026-01-20 23:26:43 JST
+  SERIAL: 2026-01-20_232643_airoom-btndead
+  TITLE: ボタン全滅（onclick属性をremoveしてaddEventListenerで付け直す方式）
   CHANGES:
+  - 【v17.0.4-btnfix3】onclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ・最小で強い）
+  - 【v17.0.4-btnfix3】動的に生成される要素にも対応（生成後に_replaceOnclickWithListeners_()を呼び出し）
   - 【v17.0.4-btnfix3】GAS側のdoGetを修正：HtmlOutputを再生成せずに返す（sandbox/実行環境を保持）
   - 【v17.0.4-btnfix3】sandbox(IFRAME)を明示して、ES6の解析エラーを防止
-  - 【v17.0.2-btnfix】onclick/window公開・未定義チェックは維持
+  - 【v17.0.2-btnfix】onclick/window公開・未定義チェックは維持（後方互換性のため）
   - 【v17.0.0】インジケータ2種追加: ドット方式（●で状態表示）・バー方式（進捗バー）を実装、設定から方式選択可能
   - 【v17.0.0】オートモード：発言量を「簡単/標準/詳細」で切り替え（既存のsummaryLevelを活用、プロンプト末尾に明確に反映）
   - 【v17.0.0】マニュアルモード：追質問機能を実装（カードに追質問ボタン追加、送信先自動固定、引用テンプレ自動挿入）
@@ -16,8 +19,8 @@
   - 【v17.0.0】過去ログ復元：議題/タイトル/モード状態も復元（セッション復元時に完全に戻る）
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
-  AUTHOR: Yui（patch） / BASE: Rex
-  BUILD_PARAM: ?b=2026-01-17_1439_btnfix2
+  AUTHOR: Rex
+  BUILD_PARAM: ?b=2026-01-20_232643_airoom-btndead
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -419,10 +422,10 @@
 </div></div>
 
 <script>
-  // --- BOOT MARKER (Yui patch) ---
-  window.__AI_ROOM_VERSION__ = 'v17.0.4-btnfix3';
-  window.__AI_ROOM_BUILD__ = '2026-01-20_142530_btnfix3';
-  // -------------------------------
+          // --- BOOT MARKER ---
+          window.__AI_ROOM_VERSION__ = 'v17.0.4-btnfix3';
+          window.__AI_ROOM_BUILD__ = '2026-01-20_232643_airoom-btndead';
+          // -------------------------------
 const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
 let selected = ['yui','gemini','rex','deepseek'];
 let currentMode = null;
@@ -760,6 +763,8 @@ window.onload = () => {
   loadSettings(); // ★追加：設定を復元★
   initUI(); 
   applySettingsToUI(); // ★追加：設定をUIに反映★
+  // ★v17.0.4-btnfix3: onclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ）★
+  _replaceOnclickWithListeners_();
 };
 
 function initUI() {
@@ -1224,6 +1229,8 @@ function sendManualMessage() {
     const displayName = normalizeDisplayName(agent, null);
     div.innerHTML = `<div class="mini-head h-${agent}"><span>${displayName}</span><button class="followup-btn" onclick="setFollowupTarget('${agent}', '${id}')">↩ 追質問</button></div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
     grid.appendChild(div);
+    // ★v17.0.4-btnfix3: 動的に生成された要素のonclick属性をremoveしてaddEventListenerで付け直す★
+    _replaceOnclickWithListeners_();
     
     google.script.run.withSuccessHandler(raw => {
       let normalized = null;
@@ -1304,6 +1311,8 @@ function startManual(theme) {
     const displayName = normalizeDisplayName(a, null);
     div.innerHTML = `<div class="mini-head h-${a}"><span>${displayName}</span><button class="followup-btn" onclick="setFollowupTarget('${a}', '${id}')">↩ 追質問</button></div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
     grid.appendChild(div);
+    // ★v17.0.4-btnfix3: 動的に生成された要素のonclick属性をremoveしてaddEventListenerで付け直す★
+    _replaceOnclickWithListeners_();
     google.script.run.withSuccessHandler(raw => {
       // ★修正②：返り値を正規化（string/objectの揺れを吸収）★
       let normalized = null;
@@ -1470,10 +1479,12 @@ function openHistoryModal(){
       } else {
         return `<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${displayText}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
       }
-    }).join('');
-  }).withFailureHandler(err=>{
-    document.getElementById('logList').innerHTML = `<div style='padding:20px;text-align:center;color:#ef4444;'>履歴の読み込みに失敗: ${err?.message || err}</div>`;
-  }).getLogList();
+            }).join('');
+            // ★v17.0.4-btnfix3: 動的に生成された要素のonclick属性をremoveしてaddEventListenerで付け直す★
+            _replaceOnclickWithListeners_();
+          }).withFailureHandler(err=>{
+            document.getElementById('logList').innerHTML = `<div style='padding:20px;text-align:center;color:#ef4444;'>履歴の読み込みに失敗: ${err?.message || err}</div>`;
+          }).getLogList();
 }
 
 function closeHistoryModal(){
@@ -1716,7 +1727,40 @@ function deleteLog(id, btn){
   }).deleteLog(id);
 }
 
-// ★v17.0.4-btnfix3: onclickが親フレーム側で評価されても動くように、window/parent/topへ安全に公開★
+// ★v17.0.4-btnfix3: onclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ・最小で強い）★
+function _replaceOnclickWithListeners_() {
+  try {
+    // onclick属性を持つすべての要素を取得
+    const elements = document.querySelectorAll('[onclick]');
+    
+    elements.forEach(el => {
+      const onclickValue = el.getAttribute('onclick');
+      if (!onclickValue || !onclickValue.trim()) return;
+      
+      // onclick属性をremove（HTMLには残したまま、動作は無効化）
+      el.removeAttribute('onclick');
+      
+      // onclick属性の値をhandler関数として作成
+      // 注意: evalを使うが、HTML内の既存コードなので安全
+      const handler = function(event) {
+        try {
+          // onclick属性の値を実行（関数スコープ内で実行されるため、windowオブジェクトに依存しない）
+          // eslint-disable-next-line no-eval
+          eval(onclickValue);
+        } catch (e) {
+          console.error('onclick handler error:', e, 'onclick value:', onclickValue);
+        }
+      };
+      
+      // addEventListenerでhandlerを付け直す
+      el.addEventListener('click', handler);
+    });
+  } catch (e) {
+    console.error('_replaceOnclickWithListeners_ error:', e);
+  }
+}
+
+// ★v17.0.4-btnfix3: onclickが親フレーム側で評価されても動くように、window/parent/topへ安全に公開（後方互換性のため維持）★
 (function(){
   const exported = {};
   // ※typeof 未宣言でも安全（ReferenceErrorにならない）
