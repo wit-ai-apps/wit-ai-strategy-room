@@ -1,24 +1,26 @@
 /**
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
- * VERSION: v17.0.6-btndead1
- * DATE(JST): 2026-01-21 00:17:24 JST
- * SERIAL: 2026-01-21_001724_airoom-btndead
- * TITLE: ボタン全滅修正（eval禁止・正規表現解析方式）
+ * VERSION: v17.0.7-upload-btndead
+ * DATE(JST): 2026-01-21 11:38:40 JST
+ * SERIAL: 2026-01-21_113840_airoom-upload-btndead
+ * TITLE: ボタン不動の原因切り分け強化（クリック観測機能追加）
  * CHANGES:
+ * - [v17.0.7-upload-btndead] debug=1時のみ、グローバルクリックキャプチャリスナー追加（透明オーバーレイ・pointer-events・z-index検出）
+ * - [v17.0.7-upload-btndead] クリック時の例外を画面内ログに表示（コンソール不要）
  * - [v17.0.6-btndead1] onclick互換レイヤ実装（eval禁止・正規表現で関数呼び出しを解析）
  * - [v17.0.6-btndead1] __bindOnclickCompat__()でonclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ）
  * - [v17.0.4-btnfix3] doGetでHtmlOutputを作り直さず、evaluate()の出力にsetContentで反映（sandbox設定を保持）
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-21_001724_airoom-btndead
+ * BUILD_PARAM: ?b=2026-01-21_113840_airoom-upload-btndead
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
-const APP_VERSION = "v17.0.6-btndead1";
-const BUILD_ID = "2026-01-21_001724_airoom-btndead";
+const APP_VERSION = "v17.0.7-upload-btndead";
+const BUILD_ID = "2026-01-21_113840_airoom-upload-btndead";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();

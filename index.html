@@ -1,11 +1,14 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.6-btndead1
-  DATE(JST): 2026-01-21 00:17:24 JST
-  SERIAL: 2026-01-21_001724_airoom-btndead
-  TITLE: ボタン全滅修正（eval禁止・正規表現解析方式）
+  VERSION: v17.0.7-upload-btndead
+  DATE(JST): 2026-01-21 11:38:40 JST
+  SERIAL: 2026-01-21_113840_airoom-upload-btndead
+  TITLE: ボタン不動の原因切り分け強化（クリック観測機能追加）
   CHANGES:
+  - 【v17.0.7-upload-btndead】debug=1時のみ、グローバルクリックキャプチャリスナー追加（透明オーバーレイ・pointer-events・z-index検出）
+  - 【v17.0.7-upload-btndead】クリック時の例外を画面内ログに表示（コンソール不要）
+  - 【v17.0.7-upload-btndead】document.elementFromPoint(x,y)で被せ要素を詳細検出
   - 【v17.0.6-btndead1】onclick互換レイヤ実装（eval禁止・正規表現で関数呼び出しを解析）
   - 【v17.0.6-btndead1】__bindOnclickCompat__()でonclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ）
   - 【v17.0.6-btndead1】__invokeOnclickString__()で関数呼び出しを安全に実行（文字列/数値/true/false/null/undefinedのみ対応）
@@ -22,7 +25,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-21_001724_airoom-btndead
+  BUILD_PARAM: ?b=2026-01-21_113840_airoom-upload-btndead
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -31,7 +34,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Round Table v17.0.6-btndead1</title>
+<title>AI Round Table v17.0.7-upload-btndead</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -767,6 +770,8 @@ window.onload = () => {
   applySettingsToUI(); // ★追加：設定をUIに反映★
   // ★v17.0.6-btndead1: onclick互換レイヤ（eval禁止・正規表現解析方式）★
   __bindOnclickCompat__();
+  // ★v17.0.7-upload-btndead: debug=1時のみ、グローバルクリックキャプチャで原因切り分け★
+  __initClickObserver__();
 };
 
 function initUI() {
@@ -1909,7 +1914,7 @@ function _parseSingleArg_(arg) {
 }
 
 // ★v17.0.6-btndead1: debug=1時のログ更新★
-function _updateDebugLog_(type, bindCount, lastClick, lastError) {
+function _updateDebugLog_(type, bindCount, lastClick, lastError, elementInfo = '') {
   const debugDiv = document.getElementById('debug-console');
   if (!debugDiv) return;
   
@@ -1920,6 +1925,7 @@ function _updateDebugLog_(type, bindCount, lastClick, lastError) {
     バインド数: ${bindCount}<br>
     最後のクリック: ${lastClick || '(なし)'}<br>
     最後のエラー: ${lastError || '(なし)'}
+    ${elementInfo ? `<br>${elementInfo}` : ''}
   `;
   
   // 既存のonclick情報を削除
@@ -1928,6 +1934,97 @@ function _updateDebugLog_(type, bindCount, lastClick, lastError) {
   
   info.setAttribute('data-onclick-info', '1');
   debugDiv.appendChild(info);
+}
+
+// ★v17.0.7-upload-btndead: debug=1時のみ、グローバルクリックキャプチャで原因切り分け★
+function __initClickObserver__() {
+  const debugMode = new URLSearchParams(window.location.search).get('debug') === '1';
+  if (!debugMode) return;
+  
+  let clickLog = [];
+  const MAX_LOG = 10;
+  
+  // グローバルなクリックキャプチャリスナー（capture: trueで全クリックを捕捉）
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    const path = e.composedPath ? Array.from(e.composedPath()) : [target];
+    
+    // クリック位置の要素を取得
+    const clickedEl = document.elementFromPoint(e.clientX, e.clientY);
+    const targetInfo = target ? `${target.tagName}${target.id ? `#${target.id}` : ''}${target.className ? `.${target.className.split(' ')[0]}` : ''}` : '(null)';
+    const clickedInfo = clickedEl ? `${clickedEl.tagName}${clickedEl.id ? `#${clickedEl.id}` : ''}${clickedEl.className ? `.${clickedEl.className.split(' ')[0]}` : ''}` : '(null)';
+    
+    // pointer-events、z-index、positionを確認
+    const computed = window.getComputedStyle(target);
+    const pointerEvents = computed.pointerEvents;
+    const zIndex = computed.zIndex;
+    const position = computed.position;
+    const display = computed.display;
+    const visibility = computed.visibility;
+    const opacity = computed.opacity;
+    
+    const logEntry = {
+      time: new Date().toLocaleTimeString('ja-JP'),
+      target: targetInfo,
+      clicked: clickedInfo,
+      isSame: target === clickedEl,
+      pointerEvents,
+      zIndex,
+      position,
+      display,
+      visibility,
+      opacity,
+      hasOnclick: target && target.hasAttribute('onclick'),
+      pathLength: path.length
+    };
+    
+    clickLog.push(logEntry);
+    if (clickLog.length > MAX_LOG) clickLog.shift();
+    
+    // 問題の可能性がある場合のみログに表示
+    const hasIssue = !logEntry.isSame || 
+                     pointerEvents === 'none' || 
+                     display === 'none' || 
+                     visibility === 'hidden' || 
+                     parseFloat(opacity) < 0.01 ||
+                     (target && !target.hasAttribute('onclick') && !target.onclick && !target.closest('button') && !target.closest('a'));
+    
+    if (hasIssue) {
+      const issueInfo = [];
+      if (!logEntry.isSame) issueInfo.push(`被せ要素: ${clickedInfo}`);
+      if (pointerEvents === 'none') issueInfo.push('pointer-events:none');
+      if (display === 'none') issueInfo.push('display:none');
+      if (visibility === 'hidden') issueInfo.push('visibility:hidden');
+      if (parseFloat(opacity) < 0.01) issueInfo.push(`opacity:${opacity}`);
+      
+      const debugDiv = document.getElementById('debug-console');
+      if (debugDiv) {
+        const warnDiv = document.createElement('div');
+        warnDiv.style.cssText = 'margin-top:8px;padding:6px;background:rgba(255,165,0,0.2);border:1px solid #ff8c00;border-radius:4px;font-size:11px;';
+        warnDiv.innerHTML = `<strong>⚠ クリック問題検出</strong><br>${logEntry.time} | ${targetInfo}<br>${issueInfo.join(' | ')}`;
+        const existing = debugDiv.querySelector('[data-click-warn]');
+        if (existing) existing.remove();
+        warnDiv.setAttribute('data-click-warn', '1');
+        debugDiv.appendChild(warnDiv);
+      }
+    }
+  }, true); // capture: trueで全クリックを捕捉
+  
+  // グローバルエラーハンドラ（クリック時の例外を捕捉）
+  window.addEventListener('error', (event) => {
+    if (event.error && event.error.message && event.error.message.includes('onclick')) {
+      const debugDiv = document.getElementById('debug-console');
+      if (debugDiv) {
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'margin-top:8px;padding:6px;background:rgba(255,0,0,0.2);border:1px solid #f00;border-radius:4px;font-size:11px;';
+        errorDiv.innerHTML = `<strong>❌ クリック時エラー</strong><br>${event.error.message}<br>${event.filename}:${event.lineno}`;
+        const existing = debugDiv.querySelector('[data-click-error]');
+        if (existing) existing.remove();
+        errorDiv.setAttribute('data-click-error', '1');
+        debugDiv.appendChild(errorDiv);
+      }
+    }
+  }, true);
 }
 
 // ★v17.0.4-btnfix3: onclickが親フレーム側で評価されても動くように、window/parent/topへ安全に公開（後方互換性のため維持）★
