@@ -26,13 +26,13 @@
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-21_180000_airroom-btndead-fix3
+ * BUILD_PARAM: ?b=2026-01-21_190100_merge-btndead-fix
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
 const APP_VERSION = "v17.0.10-btndead-fix";
-const BUILD_ID = "2026-01-21_180000_airroom-btndead-fix3";
+const BUILD_ID = "2026-01-21_190100_merge-btndead-fix";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();
