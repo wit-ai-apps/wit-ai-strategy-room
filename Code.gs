@@ -32,7 +32,7 @@
 
 const APP_NAME    = "AI Strategy Room";
 const APP_VERSION = "v17.0.11-survival";
-const BUILD_ID = "2026-01-22_001000_airroom-survival-compat-fix";
+const BUILD_ID = "2026-01-22_001500_airroom-survival-compat-fix2";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();

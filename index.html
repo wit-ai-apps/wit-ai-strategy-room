@@ -3,7 +3,7 @@
   FILE: index.html
   VERSION: v17.0.11-survival
   DATE(JST): 2026-01-22 00:10:00 JST
-  SERIAL: 2026-01-22_001000_airroom-survival-compat-fix
+  SERIAL: 2026-01-22_001500_airroom-survival-compat-fix2
   TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
   CHANGES:
   - 【v17.0.11-survival】P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
@@ -36,7 +36,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-22_001000_airroom-survival-compat-fix
+  BUILD_PARAM: ?b=2026-01-22_001500_airroom-survival-compat-fix2
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -439,6 +439,24 @@
 
 <script>
           // --- BOOT MARKER ---
+          // ★v17.0.11-survival: 関数公開を最優先で実行（SyntaxError発生前に確実に実行）★
+          (function() {
+            // 関数が定義される前に実行されるため、後で再実行される前提で準備
+            window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__ = null;
+            window.__AI_ROOM_EXPOSE_FUNCTIONS__ = function() {
+              if (!window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__) return;
+              try {
+                Object.assign(globalThis, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__);
+                Object.assign(window, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__);
+                try { if (window.parent && window.parent !== window) Object.assign(window.parent, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__); } catch(e){}
+                try { if (window.top && window.top !== window) Object.assign(window.top, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__); } catch(e){}
+                console.log('[AI会議室] 関数公開完了（早期実行）:', Object.keys(window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__).length, '個');
+              } catch(e) {
+                console.error('[AI会議室] 関数公開エラー（早期実行）:', e);
+              }
+            };
+          })();
+          
           // ★v17.0.11-survival: 初期化エラーをキャッチして表示（debug=1時）＋P1原因の切り分けログ★
           (function() {
             try {
@@ -885,25 +903,21 @@ function updateIndicator(indicatorId, state, text) {
 }
 
 window.onload = () => { 
-  // ★v17.0.11-survival: 関数公開が完了していることを確認★
+  // ★v17.0.11-survival: 関数公開が完了していることを確認（念のため再実行）★
+  if (typeof window.__AI_ROOM_EXPOSE_FUNCTIONS__ === 'function') {
+    window.__AI_ROOM_EXPOSE_FUNCTIONS__();
+  }
   if (typeof setMode !== 'function' || typeof openSettingsModal !== 'function') {
     console.error('[AI会議室] 関数公開が完了していません。再試行します...');
     // 関数公開を再実行
-    try {
-      const functionsToExpose = {
-        setFontSize, updateClock, setMode, openSettingsModal, closeSettingsModal,
-        saveSettingsAndClose, applySettingsToUI, insertTemplate, resetInput,
-        pasteFromClipboard, handleFileSelect, uploadCode, startProcess,
-        startAuto, startManual, sendManualMessage, selectAllManualTargets,
-        clearManualTargets, toggleManualTarget, setFollowupTarget,
-        openModal, closeModal, openHistoryModal, closeHistoryModal,
-        tryReset, performReset, loadLog, deleteLog, openCode, copyCode
-      };
-      Object.assign(globalThis, functionsToExpose);
-      Object.assign(window, functionsToExpose);
-      console.log('[AI会議室] 関数公開を再実行しました');
-    } catch (e) {
-      console.error('[AI会議室] 関数公開の再実行に失敗:', e);
+    if (window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__) {
+      try {
+        Object.assign(globalThis, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__);
+        Object.assign(window, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__);
+        console.log('[AI会議室] 関数公開を再実行しました');
+      } catch (e) {
+        console.error('[AI会議室] 関数公開の再実行に失敗:', e);
+      }
     }
   }
   
@@ -2308,7 +2322,7 @@ function __initClickObserver__() {
   window.__AI_ROOM_EXPOSED__ = Object.keys(exported);
 })();
 
-// ★v17.0.10-btndead-fix: 明示的なグローバル公開（初期化の最上流で実行・window.onloadより前）★
+// ★v17.0.11-survival: 明示的なグローバル公開（初期化の最上流で実行・window.onloadより前）★
 (function(){
   try {
     // onclick="..."で呼ばれる関数を全てglobalThis/windowに明示的に公開
@@ -2321,6 +2335,9 @@ function __initClickObserver__() {
       openModal, closeModal, openHistoryModal, closeHistoryModal,
       tryReset, performReset, loadLog, deleteLog, openCode, copyCode
     };
+    
+    // 早期実行用に保存
+    window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__ = functionsToExpose;
     
     // globalThisとwindowの両方に公開
     Object.assign(globalThis, functionsToExpose);
@@ -2339,6 +2356,11 @@ function __initClickObserver__() {
     } catch (e) {}
     
     console.log('[AI会議室] 関数公開完了:', Object.keys(functionsToExpose).length, '個');
+    
+    // 早期実行関数を呼び出し（念のため）
+    if (typeof window.__AI_ROOM_EXPOSE_FUNCTIONS__ === 'function') {
+      window.__AI_ROOM_EXPOSE_FUNCTIONS__();
+    }
     
     // ★v17.0.11-survival: 起動セルフチェック（必須関数がwindowに存在するかチェック・一般ユーザー向けアプリ内表示）★
     const urlParams = new URLSearchParams(window.location.search);
