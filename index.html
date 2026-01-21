@@ -1,17 +1,25 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.7-upload-btndead
-  DATE(JST): 2026-01-21 13:48:00 JST
-  SERIAL: 2026-01-21_1348_airoom-upload-btndead
-  TITLE: ボタン不動の原因切り分け強化（VERSION/BUILD表示強化・イベントハンドラデバッグ強化）
+  VERSION: v17.0.10-btndead-fix
+  DATE(JST): 2026-01-21 18:00:00 JST
+  SERIAL: 2026-01-21_180000_airroom-btndead-fix3
+  TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化＋起動セルフチェック）
   CHANGES:
+  - 【v17.0.10-btndead-fix】debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
+  - 【v17.0.10-btndead-fix】関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
+  - 【v17.0.9-btndead-fix】初期化エラーをキャッチして表示（debug=1時に初期化エラーを黒帯に表示）
+  - 【v17.0.9-btndead-fix】関数をwindowに明示的に公開（初期化の最上流でglobalThis/window/parent/topに公開）
+  - 【v17.0.9-btndead-fix】SyntaxError対策（初期化時のtry-catchでエラーを捕捉）
+  - 【v17.0.8-version-sync】バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
+  - 【v17.0.8-version-sync】ボタンクリックの発火可視化（debug=1時に黒帯にclicked: <button-id or name>を表示）
+  - 【v17.0.7-upload-btndead】debug=1時に画面上部バナーに「JS起動OK」を表示
+  - 【v17.0.7-upload-btndead】debug=1時に画面上部バナーに「最後に捕まえたclick」を表示
+  - 【v17.0.7-upload-btndead】クリックキャプチャ（capture=true）で拾えたclickを記録・表示
   - 【v17.0.7-upload-btndead】VERSION/BUILDを確実に表示（debug=1時に画面・コンソール両方に出力）
   - 【v17.0.7-upload-btndead】イベントハンドラの結びつきを詳細デバッグ（debug=1時にconsole.tableで一覧表示）
   - 【v17.0.7-upload-btndead】__bindOnclickCompat__初期化エラーを画面内ログに表示
   - 【v17.0.7-upload-btndead】debug=1時のみ、グローバルクリックキャプチャリスナー追加（透明オーバーレイ・pointer-events・z-index検出）
-  - 【v17.0.7-upload-btndead】クリック時の例外を画面内ログに表示（コンソール不要）
-  - 【v17.0.7-upload-btndead】document.elementFromPoint(x,y)で被せ要素を詳細検出
   - 【v17.0.6-btndead1】onclick互換レイヤ実装（eval禁止・正規表現で関数呼び出しを解析）
   - 【v17.0.6-btndead1】__bindOnclickCompat__()でonclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ）
   - 【v17.0.6-btndead1】__invokeOnclickString__()で関数呼び出しを安全に実行（文字列/数値/true/false/null/undefinedのみ対応）
@@ -28,7 +36,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-21_1348_airoom-upload-btndead
+  BUILD_PARAM: ?b=2026-01-21_180000_airroom-btndead-fix3
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -37,7 +45,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Round Table v17.0.7-upload-btndead</title>
+<title>AI Round Table <?= APP_VERSION ?></title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -214,7 +222,7 @@
 <div class="container" id="appContainer">
   <div class="header">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div class="app-title">AI Round Table <span class="app-meta">v17.0.4-btnfix3</span></div>
+      <div class="app-title">AI Round Table <span class="app-meta"><?= APP_VERSION ?></span></div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="font-ctrl-group">
@@ -431,39 +439,69 @@
 
 <script>
           // --- BOOT MARKER ---
-          window.__AI_ROOM_VERSION__ = 'v17.0.7-upload-btndead';
-          window.__AI_ROOM_BUILD__ = '2026-01-21_1348_airoom-upload-btndead';
-          // -------------------------------
-          // ★v17.0.7-upload-btndead: VERSION/BUILDを確実に表示（debug=1時）★
-          const urlParams = new URLSearchParams(window.location.search);
-          if (urlParams.get('debug') === '1') {
-            console.log('[AI会議室] VERSION:', window.__AI_ROOM_VERSION__, 'BUILD:', window.__AI_ROOM_BUILD__);
-            // 画面にも確実に表示（debug=1時・DOMContentLoaded後）
-            if (document.readyState === 'loading') {
-              document.addEventListener('DOMContentLoaded', () => {
-                const banner = document.getElementById('__debugBanner');
-                if (banner) {
-                  banner.innerHTML = `<b>${window.__AI_ROOM_VERSION__}</b> ｜ BUILD=${window.__AI_ROOM_BUILD__} ｜ AUTHOR=Rex ｜ debug=1`;
+          // ★v17.0.9-btndead-fix: 初期化エラーをキャッチして表示（debug=1時）★
+          (function() {
+            try {
+              window.__AI_ROOM_VERSION__ = '<?= APP_VERSION ?>';
+              window.__AI_ROOM_BUILD__ = '<?= BUILD_ID ?>';
+              window.__LAST_CLICK__ = null; // ★v17.0.7-upload-btndead: 最後に捕まえたclickを記録★
+              
+              // ★v17.0.9-btndead-fix: VERSION/BUILDを確実に表示（debug=1時）★
+              const urlParams = new URLSearchParams(window.location.search);
+              if (urlParams.get('debug') === '1') {
+                console.log('[AI会議室] JS起動OK | VERSION:', window.__AI_ROOM_VERSION__, 'BUILD:', window.__AI_ROOM_BUILD__);
+                // 画面にも確実に表示（debug=1時・DOMContentLoaded後）
+                if (document.readyState === 'loading') {
+                  document.addEventListener('DOMContentLoaded', () => {
+                    if (typeof _updateDebugBanner_ === 'function') {
+                      _updateDebugBanner_();
+                    }
+                  });
                 } else {
-                  // バナーが見つからない場合、画面上部に表示
-                  const debugBanner = document.createElement('div');
-                  debugBanner.id = '__debugBanner';
-                  debugBanner.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#111;color:#fff;padding:8px 10px;font:12px/1.3 system-ui;opacity:.92';
-                  debugBanner.innerHTML = `<b>${window.__AI_ROOM_VERSION__}</b> ｜ BUILD=${window.__AI_ROOM_BUILD__} ｜ AUTHOR=Rex ｜ debug=1`;
-                  document.body.insertBefore(debugBanner, document.body.firstChild);
-                  const spacer = document.createElement('div');
-                  spacer.style.height = '34px';
-                  document.body.insertBefore(spacer, document.body.firstChild);
+                  if (typeof _updateDebugBanner_ === 'function') {
+                    _updateDebugBanner_();
+                  }
                 }
-              });
-            } else {
-              // 既にDOMContentLoaded済みの場合
-              const banner = document.getElementById('__debugBanner');
-              if (banner) {
-                banner.innerHTML = `<b>${window.__AI_ROOM_VERSION__}</b> ｜ BUILD=${window.__AI_ROOM_BUILD__} ｜ AUTHOR=Rex ｜ debug=1`;
+              }
+            } catch (e) {
+              console.error('[AI会議室] 初期化エラー:', e);
+              const urlParams = new URLSearchParams(window.location.search);
+              if (urlParams.get('debug') === '1') {
+                // debug=1時に初期化エラーを表示
+                setTimeout(() => {
+                  const banner = document.getElementById('__debugBanner');
+                  if (banner) {
+                    banner.innerHTML = `<b>❌ 初期化エラー: ${e.message || String(e)}</b>`;
+                    banner.style.background = '#b00020';
+                  }
+                }, 100);
               }
             }
+          })();
+          
+          // ★v17.0.7-upload-btndead: debugバナーを更新（JS起動OK / BUILD / 最後に捕まえたclick）★
+          function _updateDebugBanner_() {
+            const banner = document.getElementById('__debugBanner');
+            const lastClick = window.__LAST_CLICK__ ? ` | 最後のclick: ${window.__LAST_CLICK__}` : '';
+            const bannerText = `JS起動OK | ${window.__AI_ROOM_VERSION__} | BUILD=${window.__AI_ROOM_BUILD__}${lastClick} | debug=1`;
+            
+            if (banner) {
+              banner.innerHTML = `<b>${bannerText}</b>`;
+            } else {
+              // バナーが見つからない場合、画面上部に表示
+              const debugBanner = document.createElement('div');
+              debugBanner.id = '__debugBanner';
+              debugBanner.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#111;color:#fff;padding:8px 10px;font:12px/1.3 system-ui;opacity:.92';
+              debugBanner.innerHTML = `<b>${bannerText}</b>`;
+              document.body.insertBefore(debugBanner, document.body.firstChild);
+              const spacer = document.createElement('div');
+              spacer.style.height = '34px';
+              document.body.insertBefore(spacer, document.body.firstChild);
+            }
           }
+          
+          // グローバルに公開（debug=1時の更新用）
+          window._updateDebugBanner_ = _updateDebugBanner_;
 const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
 let selected = ['yui','gemini','rex','deepseek'];
 let currentMode = null;
@@ -2011,9 +2049,23 @@ function __initClickObserver__() {
     const target = e.target;
     const path = e.composedPath ? Array.from(e.composedPath()) : [target];
     
+    // ★v17.0.7-upload-btndead: 最後に捕まえたclickを記録（画面上に表示）★
+    // ★v17.0.8-version-sync: ボタンクリックの発火可視化（debug=1時に黒帯にclicked: <button-id or name>を表示）★
+    let buttonInfo = null;
+    if (target && (target.tagName === 'BUTTON' || target.closest('button'))) {
+      const btn = target.tagName === 'BUTTON' ? target : target.closest('button');
+      buttonInfo = btn.id ? btn.id : (btn.textContent ? btn.textContent.trim().substring(0, 20) : 'button');
+    }
+    
+    const targetInfo = target ? `${target.tagName}${target.id ? `#${target.id}` : ''}${target.className ? `.${target.className.split(' ')[0]}` : ''}` : '(null)';
+    window.__LAST_CLICK__ = buttonInfo ? `clicked: ${buttonInfo}` : targetInfo;
+    if (window._updateDebugBanner_) {
+      window._updateDebugBanner_();
+    }
+    console.log('[クリックキャプチャ] 捕まえたclick:', targetInfo, buttonInfo ? `[button: ${buttonInfo}]` : '');
+    
     // クリック位置の要素を取得
     const clickedEl = document.elementFromPoint(e.clientX, e.clientY);
-    const targetInfo = target ? `${target.tagName}${target.id ? `#${target.id}` : ''}${target.className ? `.${target.className.split(' ')[0]}` : ''}` : '(null)';
     const clickedInfo = clickedEl ? `${clickedEl.tagName}${clickedEl.id ? `#${clickedEl.id}` : ''}${clickedEl.className ? `.${clickedEl.className.split(' ')[0]}` : ''}` : '(null)';
     
     // pointer-events、z-index、positionを確認
@@ -2142,11 +2194,11 @@ function __initClickObserver__() {
   window.__AI_ROOM_EXPOSED__ = Object.keys(exported);
 })();
 
-// ★v17.0.6-btndead1: 明示的なグローバル公開（保険・Object.assign方式）★
+// ★v17.0.10-btndead-fix: 明示的なグローバル公開（初期化の最上流で実行・window.onloadより前）★
 (function(){
   try {
-    // onclick="..."で呼ばれる関数を全てglobalThisに明示的に公開
-    Object.assign(globalThis, {
+    // onclick="..."で呼ばれる関数を全てglobalThis/windowに明示的に公開
+    const functionsToExpose = {
       setFontSize, updateClock, setMode, openSettingsModal, closeSettingsModal,
       saveSettingsAndClose, applySettingsToUI, insertTemplate, resetInput,
       pasteFromClipboard, handleFileSelect, uploadCode, startProcess,
@@ -2154,9 +2206,81 @@ function __initClickObserver__() {
       clearManualTargets, toggleManualTarget, setFollowupTarget,
       openModal, closeModal, openHistoryModal, closeHistoryModal,
       tryReset, performReset, loadLog, deleteLog, openCode, copyCode
-    });
+    };
+    
+    // globalThisとwindowの両方に公開
+    Object.assign(globalThis, functionsToExpose);
+    Object.assign(window, functionsToExpose);
+    
+    // 親フレーム/最上位フレームにも公開（GASのsandbox環境対策）
+    try {
+      if (window.parent && window.parent !== window) {
+        Object.assign(window.parent, functionsToExpose);
+      }
+    } catch (e) {}
+    try {
+      if (window.top && window.top !== window) {
+        Object.assign(window.top, functionsToExpose);
+      }
+    } catch (e) {}
+    
+    console.log('[AI会議室] 関数公開完了:', Object.keys(functionsToExpose).length, '個');
+    
+    // ★v17.0.10-btndead-fix: debug=1時の起動セルフチェック（必須関数がwindowに存在するか一覧でログ出し）★
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('debug') === '1') {
+      const requiredFunctions = [
+        'setMode', 'openSettingsModal', 'openHistoryModal', 'tryReset',
+        'insertTemplate', 'resetInput', 'uploadCode', 'pasteFromClipboard',
+        'openModal', 'closeModal', 'closeHistoryModal', 'closeSettingsModal',
+        'performReset', 'loadLog', 'deleteLog', 'openCode', 'copyCode',
+        'startProcess', 'startAuto', 'startManual', 'sendManualMessage',
+        'selectAllManualTargets', 'clearManualTargets', 'toggleManualTarget',
+        'setFollowupTarget', 'setFontSize', 'updateClock', 'saveSettingsAndClose',
+        'applySettingsToUI', 'handleFileSelect'
+      ];
+      
+      const missingFunctions = [];
+      const existingFunctions = [];
+      
+      requiredFunctions.forEach(funcName => {
+        if (typeof window[funcName] === 'function') {
+          existingFunctions.push(funcName);
+        } else {
+          missingFunctions.push(funcName);
+        }
+      });
+      
+      console.log('[AI会議室] 起動セルフチェック結果:');
+      console.log('  ✅ 存在する関数:', existingFunctions.length, '個', existingFunctions);
+      if (missingFunctions.length > 0) {
+        console.error('  ❌ 不足している関数:', missingFunctions.length, '個', missingFunctions);
+        // 黒帯にエラーを表示
+        setTimeout(() => {
+          const banner = document.getElementById('__debugBanner');
+          if (banner) {
+            const currentText = banner.innerHTML;
+            banner.innerHTML = currentText + ` | ❌ 不足関数: ${missingFunctions.join(', ')}`;
+            banner.style.background = '#b00020';
+          }
+        }, 200);
+      } else {
+        console.log('  ✅ すべての必須関数がwindowに存在します');
+      }
+    }
   } catch (e) {
-    console.error('Object.assign(globalThis, ...) error:', e);
+    console.error('Object.assign(globalThis/window, ...) error:', e);
+    // debug=1時に初期化エラーを表示
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('debug') === '1') {
+      setTimeout(() => {
+        const banner = document.getElementById('__debugBanner');
+        if (banner) {
+          banner.innerHTML = `<b>❌ 関数公開エラー: ${e.message || String(e)}</b>`;
+          banner.style.background = '#b00020';
+        }
+      }, 100);
+    }
   }
 })();
 

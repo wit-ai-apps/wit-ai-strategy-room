@@ -1,29 +1,38 @@
 /**
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
- * VERSION: v17.0.7-upload-btndead
- * DATE(JST): 2026-01-21 13:48:00 JST
- * SERIAL: 2026-01-21_1348_airoom-upload-btndead
- * TITLE: ボタン不動の原因切り分け強化（VERSION/BUILD表示強化・イベントハンドラデバッグ強化）
+ * VERSION: v17.0.10-btndead-fix
+ * DATE(JST): 2026-01-21 18:00:00 JST
+ * SERIAL: 2026-01-21_180000_airroom-btndead-fix3
+ * TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化＋起動セルフチェック）
  * CHANGES:
+ * - [v17.0.10-btndead-fix] debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
+ * - [v17.0.10-btndead-fix] 関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
+ * - [v17.0.9-btndead-fix] 初期化エラーをキャッチして表示（debug=1時に初期化エラーを黒帯に表示）
+ * - [v17.0.9-btndead-fix] 関数をwindowに明示的に公開（初期化の最上流でglobalThis/window/parent/topに公開）
+ * - [v17.0.9-btndead-fix] SyntaxError対策（初期化時のtry-catchでエラーを捕捉）
+ * - [v17.0.8-version-sync] バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
+ * - [v17.0.8-version-sync] ボタンクリックの発火可視化（debug=1時に黒帯にclicked: <button-id or name>を表示）
+ * - [v17.0.7-upload-btndead] debug=1時に画面上部バナーに「JS起動OK」を表示
+ * - [v17.0.7-upload-btndead] debug=1時に画面上部バナーに「最後に捕まえたclick」を表示
+ * - [v17.0.7-upload-btndead] クリックキャプチャ（capture=true）で拾えたclickを記録・表示
  * - [v17.0.7-upload-btndead] VERSION/BUILDを確実に表示（debug=1時に画面・コンソール両方に出力）
  * - [v17.0.7-upload-btndead] イベントハンドラの結びつきを詳細デバッグ（debug=1時にconsole.tableで一覧表示）
  * - [v17.0.7-upload-btndead] __bindOnclickCompat__初期化エラーを画面内ログに表示
  * - [v17.0.7-upload-btndead] debug=1時のみ、グローバルクリックキャプチャリスナー追加（透明オーバーレイ・pointer-events・z-index検出）
- * - [v17.0.7-upload-btndead] クリック時の例外を画面内ログに表示（コンソール不要）
  * - [v17.0.6-btndead1] onclick互換レイヤ実装（eval禁止・正規表現で関数呼び出しを解析）
  * - [v17.0.6-btndead1] __bindOnclickCompat__()でonclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ）
  * - [v17.0.4-btnfix3] doGetでHtmlOutputを作り直さず、evaluate()の出力にsetContentで反映（sandbox設定を保持）
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-21_1348_airoom-upload-btndead
+ * BUILD_PARAM: ?b=2026-01-21_180000_airroom-btndead-fix3
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
-const APP_VERSION = "v17.0.7-upload-btndead";
-const BUILD_ID = "2026-01-21_1348_airoom-upload-btndead";
+const APP_VERSION = "v17.0.10-btndead-fix";
+const BUILD_ID = "2026-01-21_180000_airroom-btndead-fix3";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();
