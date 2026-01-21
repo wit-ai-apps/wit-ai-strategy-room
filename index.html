@@ -1,11 +1,13 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.9-btndead-fix
-  DATE(JST): 2026-01-21 17:25:55 JST
-  SERIAL: 2026-01-21_172555_airroom-btndead-fix2
-  TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化）
+  VERSION: v17.0.10-btndead-fix
+  DATE(JST): 2026-01-21 18:00:00 JST
+  SERIAL: 2026-01-21_180000_airroom-btndead-fix3
+  TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化＋起動セルフチェック）
   CHANGES:
+  - 【v17.0.10-btndead-fix】debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
+  - 【v17.0.10-btndead-fix】関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
   - 【v17.0.9-btndead-fix】初期化エラーをキャッチして表示（debug=1時に初期化エラーを黒帯に表示）
   - 【v17.0.9-btndead-fix】関数をwindowに明示的に公開（初期化の最上流でglobalThis/window/parent/topに公開）
   - 【v17.0.9-btndead-fix】SyntaxError対策（初期化時のtry-catchでエラーを捕捉）
@@ -34,7 +36,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-21_172555_airroom-btndead-fix2
+  BUILD_PARAM: ?b=2026-01-21_180000_airroom-btndead-fix3
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -2192,7 +2194,7 @@ function __initClickObserver__() {
   window.__AI_ROOM_EXPOSED__ = Object.keys(exported);
 })();
 
-// ★v17.0.9-btndead-fix: 明示的なグローバル公開（初期化の最上流で実行）★
+// ★v17.0.10-btndead-fix: 明示的なグローバル公開（初期化の最上流で実行・window.onloadより前）★
 (function(){
   try {
     // onclick="..."で呼ばれる関数を全てglobalThis/windowに明示的に公開
@@ -2223,6 +2225,49 @@ function __initClickObserver__() {
     } catch (e) {}
     
     console.log('[AI会議室] 関数公開完了:', Object.keys(functionsToExpose).length, '個');
+    
+    // ★v17.0.10-btndead-fix: debug=1時の起動セルフチェック（必須関数がwindowに存在するか一覧でログ出し）★
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('debug') === '1') {
+      const requiredFunctions = [
+        'setMode', 'openSettingsModal', 'openHistoryModal', 'tryReset',
+        'insertTemplate', 'resetInput', 'uploadCode', 'pasteFromClipboard',
+        'openModal', 'closeModal', 'closeHistoryModal', 'closeSettingsModal',
+        'performReset', 'loadLog', 'deleteLog', 'openCode', 'copyCode',
+        'startProcess', 'startAuto', 'startManual', 'sendManualMessage',
+        'selectAllManualTargets', 'clearManualTargets', 'toggleManualTarget',
+        'setFollowupTarget', 'setFontSize', 'updateClock', 'saveSettingsAndClose',
+        'applySettingsToUI', 'handleFileSelect'
+      ];
+      
+      const missingFunctions = [];
+      const existingFunctions = [];
+      
+      requiredFunctions.forEach(funcName => {
+        if (typeof window[funcName] === 'function') {
+          existingFunctions.push(funcName);
+        } else {
+          missingFunctions.push(funcName);
+        }
+      });
+      
+      console.log('[AI会議室] 起動セルフチェック結果:');
+      console.log('  ✅ 存在する関数:', existingFunctions.length, '個', existingFunctions);
+      if (missingFunctions.length > 0) {
+        console.error('  ❌ 不足している関数:', missingFunctions.length, '個', missingFunctions);
+        // 黒帯にエラーを表示
+        setTimeout(() => {
+          const banner = document.getElementById('__debugBanner');
+          if (banner) {
+            const currentText = banner.innerHTML;
+            banner.innerHTML = currentText + ` | ❌ 不足関数: ${missingFunctions.join(', ')}`;
+            banner.style.background = '#b00020';
+          }
+        }, 200);
+      } else {
+        console.log('  ✅ すべての必須関数がwindowに存在します');
+      }
+    }
   } catch (e) {
     console.error('Object.assign(globalThis/window, ...) error:', e);
     // debug=1時に初期化エラーを表示

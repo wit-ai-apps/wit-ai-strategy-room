@@ -1,11 +1,13 @@
 /**
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
- * VERSION: v17.0.9-btndead-fix
- * DATE(JST): 2026-01-21 17:25:55 JST
- * SERIAL: 2026-01-21_172555_airroom-btndead-fix2
- * TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化）
+ * VERSION: v17.0.10-btndead-fix
+ * DATE(JST): 2026-01-21 18:00:00 JST
+ * SERIAL: 2026-01-21_180000_airroom-btndead-fix3
+ * TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化＋起動セルフチェック）
  * CHANGES:
+ * - [v17.0.10-btndead-fix] debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
+ * - [v17.0.10-btndead-fix] 関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
  * - [v17.0.9-btndead-fix] 初期化エラーをキャッチして表示（debug=1時に初期化エラーを黒帯に表示）
  * - [v17.0.9-btndead-fix] 関数をwindowに明示的に公開（初期化の最上流でglobalThis/window/parent/topに公開）
  * - [v17.0.9-btndead-fix] SyntaxError対策（初期化時のtry-catchでエラーを捕捉）
@@ -24,13 +26,13 @@
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-21_172555_airroom-btndead-fix2
+ * BUILD_PARAM: ?b=2026-01-21_180000_airroom-btndead-fix3
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
-const APP_VERSION = "v17.0.9-btndead-fix";
-const BUILD_ID = "2026-01-21_172555_airroom-btndead-fix2";
+const APP_VERSION = "v17.0.10-btndead-fix";
+const BUILD_ID = "2026-01-21_180000_airroom-btndead-fix3";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();
