@@ -2,10 +2,12 @@
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
  * VERSION: v17.0.11-survival
- * DATE(JST): 2026-01-22 00:30:00 JST
- * SERIAL: 2026-01-22_003000_airroom-survival-compat-final
+ * DATE(JST): 2026-01-22 00:45:00 JST
+ * SERIAL: 2026-01-22_004500_airroom-gemini-fix
  * TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
  * CHANGES:
+ * - [GEMINI提案] テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避：1178行目付近のclass属性を含むテンプレートリテラルを文字列連結に書き換え）
+ * - [GEMINI提案] 主要なハンドラ関数をwindowオブジェクトに明示的に代入（GAS Sandbox環境での確実なアクセス保証）
  * - [v17.0.11-survival] P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
  * - [v17.0.11-survival] P0-2: 起動セルフチェックをアプリ内表示（古いキャッシュ検知→自動更新誘導、一回更新済みフラグでループ防止）
  * - [v17.0.11-survival] P1: 原因の切り分けログ（debug=1時にAPP_VERSION/BUILD_ID、script読み込み順、主要関数の存在確認、Service Worker/Cache情報を画面内表示）
@@ -26,13 +28,13 @@
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-22_003000_airroom-survival-compat-final
+ * BUILD_PARAM: ?b=2026-01-22_004500_airroom-gemini-fix
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
 const APP_VERSION = "v17.0.11-survival";
-const BUILD_ID = "2026-01-22_003000_airroom-survival-compat-final";
+const BUILD_ID = "2026-01-22_004500_airroom-gemini-fix";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();

@@ -3,9 +3,11 @@
   FILE: index.html
   VERSION: v17.0.11-survival
   DATE(JST): 2026-01-22 00:10:00 JST
-  SERIAL: 2026-01-22_003000_airroom-survival-compat-final
+  SERIAL: 2026-01-22_004500_airroom-gemini-fix
   TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
   CHANGES:
+  - 【GEMINI提案】テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避：1178行目付近のclass属性を含むテンプレートリテラルを文字列連結に書き換え）
+  - 【GEMINI提案】主要なハンドラ関数をwindowオブジェクトに明示的に代入（GAS Sandbox環境での確実なアクセス保証）
   - 【v17.0.11-survival】P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
   - 【v17.0.11-survival】P0-2: 起動セルフチェックをアプリ内表示（古いキャッシュ検知→自動更新誘導、一回更新済みフラグでループ防止）
   - 【v17.0.11-survival】P1: 原因の切り分けログ（debug=1時にAPP_VERSION/BUILD_ID、script読み込み順、主要関数の存在確認、Service Worker/Cache情報を画面内表示）
@@ -36,7 +38,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-22_003000_airroom-survival-compat-final
+  BUILD_PARAM: ?b=2026-01-22_004500_airroom-gemini-fix
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -695,7 +697,8 @@ function _handleCutContinuation_(speaker, responseText, context, imgs, sessionId
   // CUT検知表示を追加（続き要求中）
   const attemptNum = attemptCount + 1;
   const cutIndicator = `\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています。続きを要求します... (#${attemptNum})</span>`;
-  document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(responseText + cutIndicator);
+  // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+  document.getElementById('ans-' + id).innerHTML = formatMarkdown(responseText + cutIndicator);
   // ★v17.0.0修正：インジケータ更新（CUT継続 - 方式に応じて表示）★
   updateIndicator(indicatorId, 'sending', settings.indicators.cut ? `✂ CUT → Continue #${attemptNum}` : '');
   // ★修正：contextは既に呼び出し元で追加済みなので、ここでは追加しない（二重追加防止）★
@@ -724,7 +727,8 @@ function _handleCutContinuation_(speaker, responseText, context, imgs, sessionId
       const finalText = isStillCut 
         ? combinedText + '\n\n<span style="color:#f59e0b; font-weight:bold;">（途中で切れました）</span>'
         : combinedText + '\n\n<span style="color:#10b981; font-weight:bold;">（終了）</span>';
-      document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(finalText);
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      document.getElementById('ans-' + id).innerHTML = formatMarkdown(finalText);
       // ★v17.0.0修正：インジケータ更新（CUT完了/継続終了 - 方式に応じて表示）★
       if (isStillCut && settings.indicators.cut) {
         updateIndicator(indicatorId, 'error', settings.indicatorMode === 'text' ? '✂ CUT → End' : '');
@@ -738,7 +742,8 @@ function _handleCutContinuation_(speaker, responseText, context, imgs, sessionId
   }).withFailureHandler(() => {
     // 続き要求失敗時は、元のレスポンスで続行（CUT検知表示のみ）
     const fullText = responseText + '\n\n<span style="color:#f59e0b; font-weight:bold;">✂️ CUT検知: 会話が途中で切れています（続き要求失敗）</span>';
-    document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(fullText);
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    document.getElementById('ans-' + id).innerHTML = formatMarkdown(fullText);
     // ★v17.0.0修正：インジケータ更新（CUT失敗 - 方式に応じて表示）★
     updateIndicator(indicatorId, 'error', settings.indicators.cut ? '✂ CUT → Failed' : '');
     context += `[${speaker}]: ${responseText}\n`;
@@ -826,7 +831,8 @@ function formatMarkdown(text) {
   // コードブロックをボタンに変換
   formatted = formatted.replace(/__CODE_(\d+)__/g, (m, i) => {
     if (codeSnippets[i]) {
-      return `<button class="code-link-btn" onclick="openCode(${i})">📜 コード (${codeSnippets[i].l})</button>`;
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      return '<button class="code-link-btn" onclick="openCode(' + i + ')">📜 コード (' + codeSnippets[i].l + ')</button>';
     }
     return '';
   });
@@ -869,12 +875,14 @@ function updateIndicator(indicatorId, state, text) {
   
   if (indicatorMode === 'dot') {
     // ドット方式：状態に応じてクラスを更新
-    indicatorEl.className = `indicator-dot ${state}`;
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    indicatorEl.className = 'indicator-dot ' + state;
     indicatorEl.style.display = 'inline-block';
     indicatorEl.style.opacity = '1';
   } else if (indicatorMode === 'bar') {
     // バー方式：状態に応じてクラスを更新
-    indicatorEl.className = `indicator-bar ${state}`;
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    indicatorEl.className = 'indicator-bar ' + state;
     indicatorEl.style.display = 'block';
     indicatorEl.style.opacity = '1';
     // バー方式の場合、進捗を更新
@@ -937,7 +945,8 @@ function initUI() {
   
   AGENTS.forEach(a => {
     const span = document.createElement('span');
-    span.className = `agent-badge ${selected.includes(a)?'selected':''}`;
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    span.className = 'agent-badge ' + (selected.includes(a) ? 'selected' : '');
     span.setAttribute('data-agent', a); span.id = `badge-${a}`;
     span.innerText = a.charAt(0).toUpperCase() + a.slice(1);
     span.onclick = () => toggleAgent(a);
@@ -1016,7 +1025,8 @@ function toggleAgent(a) {
 function _updateBadgeStates_() {
   const currentMc = document.getElementById('mcSelect')?.value;
   AGENTS.forEach(ag => {
-    const el = document.getElementById(`badge-${ag}`);
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    const el = document.getElementById('badge-' + ag);
     if (!el) return;
     
     // 司会AIは参加者として選べないので、selectedから除外
@@ -1071,7 +1081,8 @@ function buildProgressBar(totalSteps) {
   bar.innerHTML = '<div class="progress-line"></div>';
   for(let i=1; i<=totalSteps; i++) {
     let label = i===1 ? "開始" : i===totalSteps ? "完了" : "議論";
-    bar.innerHTML += `<div class="step" id="s${i}"><div class="step-dot">${i}</div><div class="step-label">${label}</div></div>`;
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    bar.innerHTML += '<div class="step" id="s' + i + '"><div class="step-dot">' + i + '</div><div class="step-label">' + label + '</div></div>';
   }
 }
 function updateStep(s){ 
@@ -1176,24 +1187,35 @@ function runStep(speaker, instr, imgs, title, step, role){
     // ★修正：表示名の正規化★
     const displayName = normalizeDisplayName(speaker, role);
     // ★v17.0.0修正：インジケータ表示用のID（方式に応じて表示を切り替え）★
-    const indicatorId = `indicator-${id}`;
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    const indicatorId = 'indicator-' + id;
     const indicatorMode = settings.indicatorMode || 'text';
     let indicatorHTML = '';
     
     if (indicatorMode === 'off') {
       indicatorHTML = '';
     } else if (indicatorMode === 'dot') {
-      indicatorHTML = `<span class="indicator-dot sending" id="${indicatorId}"></span>`;
+      indicatorHTML = '<span class="indicator-dot sending" id="' + indicatorId + '"></span>';
     } else if (indicatorMode === 'bar') {
-      indicatorHTML = `<div class="indicator-bar sending" id="${indicatorId}"><div class="indicator-bar-progress"></div></div>`;
+      indicatorHTML = '<div class="indicator-bar sending" id="' + indicatorId + '"><div class="indicator-bar-progress"></div></div>';
     } else {
       // 従来方式（text）
       const indicatorText = settings.indicators.thinking ? 'Thinking...' : '';
       const indicatorStyle = settings.indicators.thinking ? '' : 'style="opacity:0;"';
-      indicatorHTML = `<span id="${indicatorId}" ${indicatorStyle}>${indicatorText}</span>`;
+      indicatorHTML = '<span id="' + indicatorId + '" ' + indicatorStyle + '>' + indicatorText + '</span>';
     }
     
-    tl.insertAdjacentHTML('beforeend', `<div class="timeline-card ${roleClass}">${indicatorMode === 'bar' ? indicatorHTML : ''}<div class="tl-header h-${speaker}"><span>${displayName} ${roleBadge}</span>${indicatorMode !== 'bar' ? indicatorHTML : ''}</div><div class="tl-body" id="ans-${id}"><div class="loader">...</div></div></div>`);
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    var cardHtml = '<div class="timeline-card ' + roleClass + '">';
+    if (indicatorMode === 'bar') {
+      cardHtml += indicatorHTML;
+    }
+    cardHtml += '<div class="tl-header h-' + speaker + '"><span>' + displayName + ' ' + roleBadge + '</span>';
+    if (indicatorMode !== 'bar') {
+      cardHtml += indicatorHTML;
+    }
+    cardHtml += '</div><div class="tl-body" id="ans-' + id + '"><div class="loader">...</div></div></div>';
+    tl.insertAdjacentHTML('beforeend', cardHtml);
     
     // ★v17.0.0追加：初期状態のインジケータ更新（送信中）★
     if (indicatorMode === 'dot' || indicatorMode === 'bar') {
@@ -1212,14 +1234,18 @@ function runStep(speaker, instr, imgs, title, step, role){
       if (done) return;
       done = true;
       const msg = `(⏱ タイムアウト: ${WATCHDOG_MS/1000}秒 応答なし → 次へ進みます)`;
-      const ansEl = document.getElementById(`ans-${id}`);
-      if (ansEl) ansEl.innerHTML = `<span style="color:#b45309; font-weight:bold;">${msg}</span>`;
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      const ansEl = document.getElementById('ans-' + id);
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      if (ansEl) ansEl.innerHTML = '<span style="color:#b45309; font-weight:bold;">' + msg + '</span>';
       // ★v17.0.0修正：インジケータ更新（Timeout - 方式に応じて表示）★
-      updateIndicator(`indicator-${id}`, 'error', settings.indicators.timeout ? '⏱ Timeout (move on)' : '');
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      updateIndicator('indicator-' + id, 'error', settings.indicators.timeout ? '⏱ Timeout (move on)' : '');
       
       // ★v17.0.0追加：ドット/バー方式でもエラー状態を表示★
       if (settings.indicatorMode === 'dot' || settings.indicatorMode === 'bar') {
-        updateIndicator(`indicator-${id}`, 'error', '');
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+        updateIndicator('indicator-' + id, 'error', '');
       }
       context += `[${speaker}]: ${msg}\n`;
       resolve(); // 会議は先へ進む（done=trueでresolve）
@@ -1239,16 +1265,20 @@ function runStep(speaker, instr, imgs, title, step, role){
           // 最後の発言者とspeakerが一致するログを探す
           const lastLog = logs[logs.length - 1];
           if (lastLog && lastLog.speaker === speaker && lastLog.content) {
-            const ansEl = document.getElementById(`ans-${id}`);
+            // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      const ansEl = document.getElementById('ans-' + id);
             if (ansEl && !ansEl.innerHTML.includes(lastLog.content)) {
               // 遅延レスポンスを差し込み
-              ansEl.innerHTML = `<span style="color:#10b981; font-weight:bold;">(遅延レスポンス取得)</span><br>` + formatMarkdown(lastLog.content);
+              // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+              ansEl.innerHTML = '<span style="color:#10b981; font-weight:bold;">(遅延レスポンス取得)</span><br>' + formatMarkdown(lastLog.content);
               // ★v17.0.0修正：インジケータ更新（Late - 方式に応じて表示）★
-              updateIndicator(`indicator-${id}`, 'completed', settings.indicators.late ? '↻ Late response fetched' : '');
+              // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+              updateIndicator('indicator-' + id, 'completed', settings.indicators.late ? '↻ Late response fetched' : '');
               
               // ★v17.0.0追加：ドット/バー方式でも完了状態を表示★
               if (settings.indicatorMode === 'dot' || settings.indicatorMode === 'bar') {
-                updateIndicator(`indicator-${id}`, 'completed', '');
+                // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+                updateIndicator('indicator-' + id, 'completed', '');
               }
               context += `[${speaker}]: ${lastLog.content}\n`;
               if (retryTimer) clearInterval(retryTimer); // 取得できたら終了
@@ -1264,7 +1294,8 @@ function runStep(speaker, instr, imgs, title, step, role){
     google.script.run.withSuccessHandler(raw => {
       if (done) {
         // タイムアウト後に返ってきた場合は、既に表示されているかもしれない
-        const ansEl = document.getElementById(`ans-${id}`);
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      const ansEl = document.getElementById('ans-' + id);
         if (ansEl && !ansEl.innerHTML.includes("遅延レスポンス取得") && !ansEl.innerHTML.includes("タイムアウト")) {
           // まだ遅延レスポンスが表示されていない場合のみ更新
           ansEl.innerHTML = formatMarkdown(raw.response || raw.text || raw.message || String(raw || "(無応答)"));
@@ -1299,11 +1330,13 @@ function runStep(speaker, instr, imgs, title, step, role){
       const autoContinueEnabled = true; // 常にON
       
       // ★v17.0.0修正：インジケータ更新（Received - 方式に応じて表示）★
-      updateIndicator(`indicator-${id}`, 'completed', '✓ Received');
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      updateIndicator('indicator-' + id, 'completed', '✓ Received');
       
       // ★v17.0.0追加：ドット/バー方式でも完了状態を表示★
       if (settings.indicatorMode === 'dot' || settings.indicatorMode === 'bar') {
-        updateIndicator(`indicator-${id}`, 'completed', '');
+                // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+                updateIndicator('indicator-' + id, 'completed', '');
       }
       
       if (isCut && autoContinueEnabled) {
@@ -1311,7 +1344,8 @@ function runStep(speaker, instr, imgs, title, step, role){
         _handleCutContinuation_(speaker, responseText, context, imgs, sessionId, title, role, id, indicatorId, 0, resolve);
       } else {
         // ★v17.0.0修正：CUT検知なしの場合、formatMarkdownで「以上。」が自動追加される★
-        document.getElementById(`ans-${id}`).innerHTML = formatMarkdown(responseText);
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+        document.getElementById('ans-' + id).innerHTML = formatMarkdown(responseText);
         context += `[${speaker}]: ${responseText}\n`;
         resolve(); // 必ず次のターンへ進む
       }
@@ -1326,13 +1360,16 @@ function runStep(speaker, instr, imgs, title, step, role){
       
       // ★修正③：エラー時も次のターンへ進む（必ずresolve）★
       const errorText = `(システムエラー)\n${err.message || err}`;
-      document.getElementById(`ans-${id}`).innerHTML = `<span style="color:red;">${errorText}</span>`;
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      document.getElementById('ans-' + id).innerHTML = '<span style="color:red;">' + errorText + '</span>';
       // ★v17.0.0修正：インジケータ更新（Error - 方式に応じて表示）★
-      updateIndicator(`indicator-${id}`, 'error', settings.indicators.error ? '⚠ Error' : '');
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      updateIndicator('indicator-' + id, 'error', settings.indicators.error ? '⚠ Error' : '');
       
       // ★v17.0.0追加：ドット/バー方式でもエラー状態を表示★
       if (settings.indicatorMode === 'dot' || settings.indicatorMode === 'bar') {
-        updateIndicator(`indicator-${id}`, 'error', '');
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+        updateIndicator('indicator-' + id, 'error', '');
       }
       context += `[${speaker}]: ${errorText}\n`;
       resolve(); // 必ず次のターンへ進む（rejectしない）
@@ -1433,9 +1470,11 @@ function sendManualMessage() {
     
     const div = document.createElement('div');
     div.className = 'mini-col';
-    const id = `hist-${agent}-${Date.now()}`;
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    const id = 'hist-' + agent + '-' + Date.now();
     const displayName = normalizeDisplayName(agent, null);
-    div.innerHTML = `<div class="mini-head h-${agent}"><span>${displayName}</span><button class="followup-btn" onclick="setFollowupTarget('${agent}', '${id}')">↩ 追質問</button></div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    div.innerHTML = '<div class="mini-head h-' + agent + '"><span>' + displayName + '</span><button class="followup-btn" onclick="setFollowupTarget(\'' + agent + '\', \'' + id + '\')">↩ 追質問</button></div><div class="mini-body" id="' + id + '"><div style="color:#999;">Thinking...</div></div>';
     grid.appendChild(div);
     // ★v17.0.6-btndead1: 動的に生成された要素のonclick互換レイヤを適用★
     __bindOnclickCompat__();
@@ -1515,7 +1554,8 @@ function startManual(theme) {
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   sendTargets.forEach(a => {
     const div = document.createElement('div'); div.className = 'mini-col';
-    const id = `hist-${a}-${Date.now()}`;
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    const id = 'hist-' + a + '-' + Date.now();
     const displayName = normalizeDisplayName(a, null);
     div.innerHTML = `<div class="mini-head h-${a}"><span>${displayName}</span><button class="followup-btn" onclick="setFollowupTarget('${a}', '${id}')">↩ 追質問</button></div><div class="mini-body" id="${id}"><div style="color:#999;">Thinking...</div></div>`;
     grid.appendChild(div);
@@ -1592,7 +1632,8 @@ async function handleFileSelect(e){
       imagesBase64.push(c);
       const wrapper = document.createElement('div');
       wrapper.className = 'preview-wrapper';
-      wrapper.innerHTML = `<img src="${c}" class="preview-thumb"><div class="preview-popup"><img src="${c}"></div>`;
+      // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+      wrapper.innerHTML = '<img src="' + c + '" class="preview-thumb"><div class="preview-popup"><img src="' + c + '"></div>';
       document.getElementById('previewArea').appendChild(wrapper);
     }
   }
@@ -1630,7 +1671,8 @@ async function pasteFromClipboard(){
           imagesBase64.push(c);
           const w = document.createElement('div');
           w.className = 'preview-wrapper';
-          w.innerHTML = `<img src="${c}" class="preview-thumb"><div class="preview-popup"><img src="${c}"></div>`;
+          // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+          w.innerHTML = '<img src="' + c + '" class="preview-thumb"><div class="preview-popup"><img src="' + c + '"></div>';
           document.getElementById('previewArea').appendChild(w);
         }
       }
@@ -1683,7 +1725,8 @@ function openHistoryModal(){
           // dateフィールドがある場合
           if (x.date instanceof Date) {
             const d = x.date;
-            dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+            dateStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
           } else {
             dateStr = String(x.date);
           }
@@ -1696,10 +1739,13 @@ function openHistoryModal(){
       const hasUrl = x.url && x.url.trim() && x.url.trim() !== '';
       const hasFileId = x.fileId && x.fileId.trim() && x.fileId.trim() !== '';
       if (hasUrl || hasFileId) {
-        const url = hasUrl ? x.url : `https://drive.google.com/file/d/${x.fileId}/view`;
-        return `<div class="log-item"><div class="log-text" onclick="window.open('${url}', '_blank')">${displayText}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+        const url = hasUrl ? x.url : 'https://drive.google.com/file/d/' + x.fileId + '/view';
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+        return '<div class="log-item"><div class="log-text" onclick="window.open(\'' + url + '\', \'_blank\')">' + displayText + '</div><button class="log-del-btn" onclick="deleteLog(\'' + x.id + '\',this)">削除</button></div>';
       } else {
-        return `<div class="log-item"><div class="log-text" onclick="loadLog('${x.id}')">${displayText}</div><button class="log-del-btn" onclick="deleteLog('${x.id}',this)">削除</button></div>`;
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+        return '<div class="log-item"><div class="log-text" onclick="loadLog(\'' + x.id + '\')">' + displayText + '</div><button class="log-del-btn" onclick="deleteLog(\'' + x.id + '\',this)">削除</button></div>';
       }
             }).join('');
             // ★v17.0.4-btnfix3: 動的に生成された要素のonclick属性をremoveしてaddEventListenerで付け直す★
@@ -1752,7 +1798,8 @@ function applySettingsToUI() {
   
   // ★v17.0.0追加：カスタム名をUIに反映★
   AGENTS.forEach(agent => {
-    const inputEl = document.getElementById(`customName-${agent}`);
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    const inputEl = document.getElementById('customName-' + agent);
     if (inputEl && settings.customNames && settings.customNames[agent]) {
       inputEl.value = settings.customNames[agent];
     } else if (inputEl) {
@@ -1779,7 +1826,8 @@ function saveSettingsAndClose() {
   // ★v17.0.0追加：カスタム名を保存★
   if (!settings.customNames) settings.customNames = {};
   AGENTS.forEach(agent => {
-    const inputEl = document.getElementById(`customName-${agent}`);
+    // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+    const inputEl = document.getElementById('customName-' + agent);
     if (inputEl) {
       const customName = inputEl.value.trim();
       if (customName) {
@@ -1929,14 +1977,10 @@ function loadLog(sessionId){
         
         // タイムラインカードを作成
         const card = document.createElement('div');
-        card.className = `timeline-card ${roleClass}`;
-        card.innerHTML = `
-          <div class="tl-header h-${speaker.toLowerCase()}">
-            <span>${displayName} ${roleBadge}</span>
-            <span>${time}</span>
-          </div>
-          <div class="tl-body">${formatMarkdown(content)}</div>
-        `;
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+        card.className = 'timeline-card ' + roleClass;
+        // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
+        card.innerHTML = '<div class="tl-header h-' + speaker.toLowerCase() + '"><span>' + displayName + ' ' + roleBadge + '</span><span>' + time + '</span></div><div class="tl-body">' + formatMarkdown(content) + '</div>';
         tl.appendChild(card);
       });
       
@@ -2476,6 +2520,36 @@ function __initClickObserver__() {
         }
       }, 100);
     }
+  }
+})();
+
+// ★GEMINI提案: 主要なハンドラ関数をwindowオブジェクトに明示的に代入（GAS Sandbox環境での確実なアクセス保証）★
+(function() {
+  try {
+    // 関数が定義されている場合のみ公開
+    if (typeof setMode === 'function') window.setMode = setMode;
+    if (typeof openSettingsModal === 'function') window.openSettingsModal = openSettingsModal;
+    if (typeof openHistoryModal === 'function') window.openHistoryModal = openHistoryModal;
+    if (typeof tryReset === 'function') window.tryReset = tryReset;
+    if (typeof insertTemplate === 'function') window.insertTemplate = insertTemplate;
+    if (typeof resetInput === 'function') window.resetInput = resetInput;
+    if (typeof pasteFromClipboard === 'function') window.pasteFromClipboard = pasteFromClipboard;
+    if (typeof uploadCode === 'function') window.uploadCode = uploadCode;
+    if (typeof openModal === 'function') window.openModal = openModal;
+    if (typeof closeModal === 'function') window.closeModal = closeModal;
+    if (typeof closeHistoryModal === 'function') window.closeHistoryModal = closeHistoryModal;
+    if (typeof closeSettingsModal === 'function') window.closeSettingsModal = closeSettingsModal;
+    if (typeof performReset === 'function') window.performReset = performReset;
+    if (typeof loadLog === 'function') window.loadLog = loadLog;
+    if (typeof deleteLog === 'function') window.deleteLog = deleteLog;
+    if (typeof openCode === 'function') window.openCode = openCode;
+    if (typeof copyCode === 'function') window.copyCode = copyCode;
+    if (typeof startProcess === 'function') window.startProcess = startProcess;
+    if (typeof setFontSize === 'function') window.setFontSize = setFontSize;
+    if (typeof updateClock === 'function') window.updateClock = updateClock;
+    console.log('[AI会議室] GEMINI提案: windowオブジェクトへの関数公開完了');
+  } catch (e) {
+    console.error('[AI会議室] GEMINI提案: windowオブジェクトへの関数公開エラー:', e);
   }
 })();
 
