@@ -1751,6 +1751,19 @@ function __bindOnclickCompat__() {
         e.preventDefault();
         e.stopPropagation();
         lastClick = onclickValue;
+        
+        // ★v17.0.6-btndead1: debug=1時のみ、クリックが届いていない可能性の切り分け★
+        if (debugMode) {
+          const clickedEl = document.elementFromPoint(e.clientX, e.clientY);
+          if (clickedEl && clickedEl !== el) {
+            const tagInfo = clickedEl.tagName + (clickedEl.id ? `#${clickedEl.id}` : '') + (clickedEl.className ? `.${clickedEl.className.split(' ')[0]}` : '');
+            console.warn('[onclick互換レイヤ] クリック位置の要素が異なる:', tagInfo);
+            if (lastError) {
+              lastError += ` | 被せ要素: ${tagInfo}`;
+            }
+          }
+        }
+        
         try {
           __invokeOnclickString__(onclickValue);
         } catch (err) {
@@ -1968,6 +1981,24 @@ function _updateDebugLog_(type, bindCount, lastClick, lastError) {
   try { if (window.top && window.top !== window) exposeTo(window.top); } catch(e) {}
 
   window.__AI_ROOM_EXPOSED__ = Object.keys(exported);
+})();
+
+// ★v17.0.6-btndead1: 明示的なグローバル公開（保険・Object.assign方式）★
+(function(){
+  try {
+    // onclick="..."で呼ばれる関数を全てglobalThisに明示的に公開
+    Object.assign(globalThis, {
+      setFontSize, updateClock, setMode, openSettingsModal, closeSettingsModal,
+      saveSettingsAndClose, applySettingsToUI, insertTemplate, resetInput,
+      pasteFromClipboard, handleFileSelect, uploadCode, startProcess,
+      startAuto, startManual, sendManualMessage, selectAllManualTargets,
+      clearManualTargets, toggleManualTarget, setFollowupTarget,
+      openModal, closeModal, openHistoryModal, closeHistoryModal,
+      tryReset, performReset, loadLog, deleteLog, openCode, copyCode
+    });
+  } catch (e) {
+    console.error('Object.assign(globalThis, ...) error:', e);
+  }
 })();
 
 // ★v17.0.0-fix: エラーハンドリング（画面内デバッグ欄への出力）★
