@@ -2,10 +2,13 @@
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
   VERSION: v17.0.7-upload-btndead
-  DATE(JST): 2026-01-21 11:38:40 JST
-  SERIAL: 2026-01-21_113840_airoom-upload-btndead
-  TITLE: ボタン不動の原因切り分け強化（クリック観測機能追加）
+  DATE(JST): 2026-01-21 13:48:00 JST
+  SERIAL: 2026-01-21_1348_airoom-upload-btndead
+  TITLE: ボタン不動の原因切り分け強化（VERSION/BUILD表示強化・イベントハンドラデバッグ強化）
   CHANGES:
+  - 【v17.0.7-upload-btndead】VERSION/BUILDを確実に表示（debug=1時に画面・コンソール両方に出力）
+  - 【v17.0.7-upload-btndead】イベントハンドラの結びつきを詳細デバッグ（debug=1時にconsole.tableで一覧表示）
+  - 【v17.0.7-upload-btndead】__bindOnclickCompat__初期化エラーを画面内ログに表示
   - 【v17.0.7-upload-btndead】debug=1時のみ、グローバルクリックキャプチャリスナー追加（透明オーバーレイ・pointer-events・z-index検出）
   - 【v17.0.7-upload-btndead】クリック時の例外を画面内ログに表示（コンソール不要）
   - 【v17.0.7-upload-btndead】document.elementFromPoint(x,y)で被せ要素を詳細検出
@@ -25,7 +28,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-21_113840_airoom-upload-btndead
+  BUILD_PARAM: ?b=2026-01-21_1348_airoom-upload-btndead
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -428,9 +431,39 @@
 
 <script>
           // --- BOOT MARKER ---
-          window.__AI_ROOM_VERSION__ = 'v17.0.6-btndead1';
-          window.__AI_ROOM_BUILD__ = '2026-01-21_001724_airoom-btndead';
+          window.__AI_ROOM_VERSION__ = 'v17.0.7-upload-btndead';
+          window.__AI_ROOM_BUILD__ = '2026-01-21_1348_airoom-upload-btndead';
           // -------------------------------
+          // ★v17.0.7-upload-btndead: VERSION/BUILDを確実に表示（debug=1時）★
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('debug') === '1') {
+            console.log('[AI会議室] VERSION:', window.__AI_ROOM_VERSION__, 'BUILD:', window.__AI_ROOM_BUILD__);
+            // 画面にも確実に表示（debug=1時・DOMContentLoaded後）
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', () => {
+                const banner = document.getElementById('__debugBanner');
+                if (banner) {
+                  banner.innerHTML = `<b>${window.__AI_ROOM_VERSION__}</b> ｜ BUILD=${window.__AI_ROOM_BUILD__} ｜ AUTHOR=Rex ｜ debug=1`;
+                } else {
+                  // バナーが見つからない場合、画面上部に表示
+                  const debugBanner = document.createElement('div');
+                  debugBanner.id = '__debugBanner';
+                  debugBanner.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#111;color:#fff;padding:8px 10px;font:12px/1.3 system-ui;opacity:.92';
+                  debugBanner.innerHTML = `<b>${window.__AI_ROOM_VERSION__}</b> ｜ BUILD=${window.__AI_ROOM_BUILD__} ｜ AUTHOR=Rex ｜ debug=1`;
+                  document.body.insertBefore(debugBanner, document.body.firstChild);
+                  const spacer = document.createElement('div');
+                  spacer.style.height = '34px';
+                  document.body.insertBefore(spacer, document.body.firstChild);
+                }
+              });
+            } else {
+              // 既にDOMContentLoaded済みの場合
+              const banner = document.getElementById('__debugBanner');
+              if (banner) {
+                banner.innerHTML = `<b>${window.__AI_ROOM_VERSION__}</b> ｜ BUILD=${window.__AI_ROOM_BUILD__} ｜ AUTHOR=Rex ｜ debug=1`;
+              }
+            }
+          }
 const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
 let selected = ['yui','gemini','rex','deepseek'];
 let currentMode = null;
@@ -1736,6 +1769,7 @@ function deleteLog(id, btn){
 
 // ★v17.0.4-btnfix3: onclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ・最小で強い）★
 // ★v17.0.6-btndead1: onclick互換レイヤ（eval禁止・正規表現解析方式）★
+// ★v17.0.7-upload-btndead: イベントハンドラの結びつきを確実にデバッグ★
 function __bindOnclickCompat__() {
   try {
     const elements = document.querySelectorAll('[onclick]');
@@ -1743,19 +1777,26 @@ function __bindOnclickCompat__() {
     let bindCount = 0;
     let lastClick = null;
     let lastError = null;
+    const bindInfo = []; // debug=1時用：ハンドラ結びつき情報
     
     elements.forEach(el => {
       const onclickValue = el.getAttribute('onclick');
       if (!onclickValue || !onclickValue.trim()) return;
       
+      const elInfo = `${el.tagName}${el.id ? `#${el.id}` : ''}${el.className ? `.${el.className.split(' ')[0]}` : ''}`;
+      
       // onclick属性をremove（HTMLには残したまま、動作は無効化）
       el.removeAttribute('onclick');
       
       // addEventListenerでhandlerを付け直す
-      el.addEventListener('click', (e) => {
+      const handler = (e) => {
         e.preventDefault();
         e.stopPropagation();
         lastClick = onclickValue;
+        
+        if (debugMode) {
+          console.log('[onclick互換レイヤ] クリック発火:', elInfo, onclickValue);
+        }
         
         // ★v17.0.6-btndead1: debug=1時のみ、クリックが届いていない可能性の切り分け★
         if (debugMode) {
@@ -1773,20 +1814,41 @@ function __bindOnclickCompat__() {
           __invokeOnclickString__(onclickValue);
         } catch (err) {
           lastError = err.message || String(err);
-          console.error('onclick handler error:', err, 'onclick value:', onclickValue);
+          console.error('[onclick互換レイヤ] handler error:', err, 'onclick value:', onclickValue, 'element:', elInfo);
           if (debugMode) {
             _updateDebugLog_('onclick', bindCount, lastClick, lastError);
           }
         }
-      });
+      };
+      
+      el.addEventListener('click', handler);
       bindCount++;
+      
+      // debug=1時：ハンドラ結びつき情報を記録
+      if (debugMode) {
+        bindInfo.push({ element: elInfo, onclick: onclickValue, hasHandler: true });
+      }
     });
     
     if (debugMode) {
-      _updateDebugLog_('onclick', bindCount, lastClick, lastError);
+      console.log(`[onclick互換レイヤ] バインド完了: ${bindCount}個の要素にハンドラを設定`);
+      if (bindInfo.length > 0) {
+        console.table(bindInfo);
+      }
+      _updateDebugLog_('onclick', bindCount, lastClick, lastError, `ハンドラ結びつき: ${bindCount}個`);
     }
   } catch (e) {
     console.error('__bindOnclickCompat__ error:', e);
+    const debugMode = new URLSearchParams(window.location.search).get('debug') === '1';
+    if (debugMode) {
+      const debugDiv = document.getElementById('debug-console');
+      if (debugDiv) {
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'margin-top:8px;padding:6px;background:rgba(255,0,0,0.2);border:1px solid #f00;border-radius:4px;font-size:11px;';
+        errorDiv.innerHTML = `<strong>❌ __bindOnclickCompat__初期化エラー</strong><br>${e.message}`;
+        debugDiv.appendChild(errorDiv);
+      }
+    }
   }
 }
 
