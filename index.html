@@ -1,11 +1,13 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.7-upload-btndead
-  DATE(JST): 2026-01-21 14:06:21 JST
-  SERIAL: 2026-01-21_1406_airoom-upload-btndead
-  TITLE: ボタン不動の原因切り分け強化（JS起動OK・最後に捕まえたclick表示）
+  VERSION: v17.0.8-version-sync
+  DATE(JST): 2026-01-21 16:01:00 JST
+  SERIAL: 2026-01-21_1601_airoom-btndead-upload
+  TITLE: バージョン表示の単一ソース化＋ボタンクリック発火可視化
   CHANGES:
+  - 【v17.0.8-version-sync】バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
+  - 【v17.0.8-version-sync】ボタンクリックの発火可視化（debug=1時に黒帯にclicked: <button-id or name>を表示）
   - 【v17.0.7-upload-btndead】debug=1時に画面上部バナーに「JS起動OK」を表示
   - 【v17.0.7-upload-btndead】debug=1時に画面上部バナーに「最後に捕まえたclick」を表示
   - 【v17.0.7-upload-btndead】クリックキャプチャ（capture=true）で拾えたclickを記録・表示
@@ -29,7 +31,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-21_1406_airoom-upload-btndead
+  BUILD_PARAM: ?b=2026-01-21_1601_airoom-btndead-upload
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -38,7 +40,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Round Table v17.0.7-upload-btndead</title>
+<title>AI Round Table <?= APP_VERSION ?></title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -215,7 +217,7 @@
 <div class="container" id="appContainer">
   <div class="header">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div class="app-title">AI Round Table <span class="app-meta">v17.0.4-btnfix3</span></div>
+      <div class="app-title">AI Round Table <span class="app-meta"><?= APP_VERSION ?></span></div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="font-ctrl-group">
@@ -432,8 +434,8 @@
 
 <script>
           // --- BOOT MARKER ---
-          window.__AI_ROOM_VERSION__ = 'v17.0.7-upload-btndead';
-          window.__AI_ROOM_BUILD__ = '2026-01-21_1406_airoom-upload-btndead';
+          window.__AI_ROOM_VERSION__ = '<?= APP_VERSION ?>';
+          window.__AI_ROOM_BUILD__ = '<?= BUILD_ID ?>';
           window.__LAST_CLICK__ = null; // ★v17.0.7-upload-btndead: 最後に捕まえたclickを記録★
           // -------------------------------
           // ★v17.0.7-upload-btndead: VERSION/BUILDを確実に表示（debug=1時）★
@@ -2021,12 +2023,19 @@ function __initClickObserver__() {
     const path = e.composedPath ? Array.from(e.composedPath()) : [target];
     
     // ★v17.0.7-upload-btndead: 最後に捕まえたclickを記録（画面上に表示）★
+    // ★v17.0.8-version-sync: ボタンクリックの発火可視化（debug=1時に黒帯にclicked: <button-id or name>を表示）★
+    let buttonInfo = null;
+    if (target && (target.tagName === 'BUTTON' || target.closest('button'))) {
+      const btn = target.tagName === 'BUTTON' ? target : target.closest('button');
+      buttonInfo = btn.id ? btn.id : (btn.textContent ? btn.textContent.trim().substring(0, 20) : 'button');
+    }
+    
     const targetInfo = target ? `${target.tagName}${target.id ? `#${target.id}` : ''}${target.className ? `.${target.className.split(' ')[0]}` : ''}` : '(null)';
-    window.__LAST_CLICK__ = targetInfo;
+    window.__LAST_CLICK__ = buttonInfo ? `clicked: ${buttonInfo}` : targetInfo;
     if (window._updateDebugBanner_) {
       window._updateDebugBanner_();
     }
-    console.log('[クリックキャプチャ] 捕まえたclick:', targetInfo);
+    console.log('[クリックキャプチャ] 捕まえたclick:', targetInfo, buttonInfo ? `[button: ${buttonInfo}]` : '');
     
     // クリック位置の要素を取得
     const clickedEl = document.elementFromPoint(e.clientX, e.clientY);
