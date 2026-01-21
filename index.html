@@ -1,11 +1,14 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.8-version-sync
-  DATE(JST): 2026-01-21 16:01:00 JST
-  SERIAL: 2026-01-21_1601_airoom-btndead-upload
-  TITLE: バージョン表示の単一ソース化＋ボタンクリック発火可視化
+  VERSION: v17.0.9-btndead-fix
+  DATE(JST): 2026-01-21 17:25:55 JST
+  SERIAL: 2026-01-21_172555_airroom-btndead-fix2
+  TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化）
   CHANGES:
+  - 【v17.0.9-btndead-fix】初期化エラーをキャッチして表示（debug=1時に初期化エラーを黒帯に表示）
+  - 【v17.0.9-btndead-fix】関数をwindowに明示的に公開（初期化の最上流でglobalThis/window/parent/topに公開）
+  - 【v17.0.9-btndead-fix】SyntaxError対策（初期化時のtry-catchでエラーを捕捉）
   - 【v17.0.8-version-sync】バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
   - 【v17.0.8-version-sync】ボタンクリックの発火可視化（debug=1時に黒帯にclicked: <button-id or name>を表示）
   - 【v17.0.7-upload-btndead】debug=1時に画面上部バナーに「JS起動OK」を表示
@@ -31,7 +34,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-21_1601_airoom-btndead-upload
+  BUILD_PARAM: ?b=2026-01-21_172555_airroom-btndead-fix2
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -434,23 +437,45 @@
 
 <script>
           // --- BOOT MARKER ---
-          window.__AI_ROOM_VERSION__ = '<?= APP_VERSION ?>';
-          window.__AI_ROOM_BUILD__ = '<?= BUILD_ID ?>';
-          window.__LAST_CLICK__ = null; // ★v17.0.7-upload-btndead: 最後に捕まえたclickを記録★
-          // -------------------------------
-          // ★v17.0.7-upload-btndead: VERSION/BUILDを確実に表示（debug=1時）★
-          const urlParams = new URLSearchParams(window.location.search);
-          if (urlParams.get('debug') === '1') {
-            console.log('[AI会議室] JS起動OK | VERSION:', window.__AI_ROOM_VERSION__, 'BUILD:', window.__AI_ROOM_BUILD__);
-            // 画面にも確実に表示（debug=1時・DOMContentLoaded後）
-            if (document.readyState === 'loading') {
-              document.addEventListener('DOMContentLoaded', () => {
-                _updateDebugBanner_();
-              });
-            } else {
-              _updateDebugBanner_();
+          // ★v17.0.9-btndead-fix: 初期化エラーをキャッチして表示（debug=1時）★
+          (function() {
+            try {
+              window.__AI_ROOM_VERSION__ = '<?= APP_VERSION ?>';
+              window.__AI_ROOM_BUILD__ = '<?= BUILD_ID ?>';
+              window.__LAST_CLICK__ = null; // ★v17.0.7-upload-btndead: 最後に捕まえたclickを記録★
+              
+              // ★v17.0.9-btndead-fix: VERSION/BUILDを確実に表示（debug=1時）★
+              const urlParams = new URLSearchParams(window.location.search);
+              if (urlParams.get('debug') === '1') {
+                console.log('[AI会議室] JS起動OK | VERSION:', window.__AI_ROOM_VERSION__, 'BUILD:', window.__AI_ROOM_BUILD__);
+                // 画面にも確実に表示（debug=1時・DOMContentLoaded後）
+                if (document.readyState === 'loading') {
+                  document.addEventListener('DOMContentLoaded', () => {
+                    if (typeof _updateDebugBanner_ === 'function') {
+                      _updateDebugBanner_();
+                    }
+                  });
+                } else {
+                  if (typeof _updateDebugBanner_ === 'function') {
+                    _updateDebugBanner_();
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('[AI会議室] 初期化エラー:', e);
+              const urlParams = new URLSearchParams(window.location.search);
+              if (urlParams.get('debug') === '1') {
+                // debug=1時に初期化エラーを表示
+                setTimeout(() => {
+                  const banner = document.getElementById('__debugBanner');
+                  if (banner) {
+                    banner.innerHTML = `<b>❌ 初期化エラー: ${e.message || String(e)}</b>`;
+                    banner.style.background = '#b00020';
+                  }
+                }, 100);
+              }
             }
-          }
+          })();
           
           // ★v17.0.7-upload-btndead: debugバナーを更新（JS起動OK / BUILD / 最後に捕まえたclick）★
           function _updateDebugBanner_() {
@@ -2167,11 +2192,11 @@ function __initClickObserver__() {
   window.__AI_ROOM_EXPOSED__ = Object.keys(exported);
 })();
 
-// ★v17.0.6-btndead1: 明示的なグローバル公開（保険・Object.assign方式）★
+// ★v17.0.9-btndead-fix: 明示的なグローバル公開（初期化の最上流で実行）★
 (function(){
   try {
-    // onclick="..."で呼ばれる関数を全てglobalThisに明示的に公開
-    Object.assign(globalThis, {
+    // onclick="..."で呼ばれる関数を全てglobalThis/windowに明示的に公開
+    const functionsToExpose = {
       setFontSize, updateClock, setMode, openSettingsModal, closeSettingsModal,
       saveSettingsAndClose, applySettingsToUI, insertTemplate, resetInput,
       pasteFromClipboard, handleFileSelect, uploadCode, startProcess,
@@ -2179,9 +2204,38 @@ function __initClickObserver__() {
       clearManualTargets, toggleManualTarget, setFollowupTarget,
       openModal, closeModal, openHistoryModal, closeHistoryModal,
       tryReset, performReset, loadLog, deleteLog, openCode, copyCode
-    });
+    };
+    
+    // globalThisとwindowの両方に公開
+    Object.assign(globalThis, functionsToExpose);
+    Object.assign(window, functionsToExpose);
+    
+    // 親フレーム/最上位フレームにも公開（GASのsandbox環境対策）
+    try {
+      if (window.parent && window.parent !== window) {
+        Object.assign(window.parent, functionsToExpose);
+      }
+    } catch (e) {}
+    try {
+      if (window.top && window.top !== window) {
+        Object.assign(window.top, functionsToExpose);
+      }
+    } catch (e) {}
+    
+    console.log('[AI会議室] 関数公開完了:', Object.keys(functionsToExpose).length, '個');
   } catch (e) {
-    console.error('Object.assign(globalThis, ...) error:', e);
+    console.error('Object.assign(globalThis/window, ...) error:', e);
+    // debug=1時に初期化エラーを表示
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('debug') === '1') {
+      setTimeout(() => {
+        const banner = document.getElementById('__debugBanner');
+        if (banner) {
+          banner.innerHTML = `<b>❌ 関数公開エラー: ${e.message || String(e)}</b>`;
+          banner.style.background = '#b00020';
+        }
+      }, 100);
+    }
   }
 })();
 
