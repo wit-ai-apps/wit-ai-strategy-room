@@ -2,8 +2,8 @@
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
   VERSION: v17.0.11-survival
-  DATE(JST): 2026-01-22 00:01:00 JST
-  SERIAL: 2026-01-22_000100_airroom-survival-compat
+  DATE(JST): 2026-01-22 00:10:00 JST
+  SERIAL: 2026-01-22_001000_airroom-survival-compat-fix
   TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
   CHANGES:
   - 【v17.0.11-survival】P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
@@ -36,7 +36,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-22_000100_airroom-survival-compat
+  BUILD_PARAM: ?b=2026-01-22_001000_airroom-survival-compat-fix
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -885,6 +885,28 @@ function updateIndicator(indicatorId, state, text) {
 }
 
 window.onload = () => { 
+  // ★v17.0.11-survival: 関数公開が完了していることを確認★
+  if (typeof setMode !== 'function' || typeof openSettingsModal !== 'function') {
+    console.error('[AI会議室] 関数公開が完了していません。再試行します...');
+    // 関数公開を再実行
+    try {
+      const functionsToExpose = {
+        setFontSize, updateClock, setMode, openSettingsModal, closeSettingsModal,
+        saveSettingsAndClose, applySettingsToUI, insertTemplate, resetInput,
+        pasteFromClipboard, handleFileSelect, uploadCode, startProcess,
+        startAuto, startManual, sendManualMessage, selectAllManualTargets,
+        clearManualTargets, toggleManualTarget, setFollowupTarget,
+        openModal, closeModal, openHistoryModal, closeHistoryModal,
+        tryReset, performReset, loadLog, deleteLog, openCode, copyCode
+      };
+      Object.assign(globalThis, functionsToExpose);
+      Object.assign(window, functionsToExpose);
+      console.log('[AI会議室] 関数公開を再実行しました');
+    } catch (e) {
+      console.error('[AI会議室] 関数公開の再実行に失敗:', e);
+    }
+  }
+  
   updateClock(); 
   setInterval(updateClock,60000); 
   loadSettings(); // ★追加：設定を復元★
