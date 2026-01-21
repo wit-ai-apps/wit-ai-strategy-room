@@ -2,28 +2,30 @@
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
  * VERSION: v17.0.7-upload-btndead
- * DATE(JST): 2026-01-21 13:48:00 JST
- * SERIAL: 2026-01-21_1348_airoom-upload-btndead
- * TITLE: ボタン不動の原因切り分け強化（VERSION/BUILD表示強化・イベントハンドラデバッグ強化）
+ * DATE(JST): 2026-01-21 14:06:21 JST
+ * SERIAL: 2026-01-21_1406_airoom-upload-btndead
+ * TITLE: ボタン不動の原因切り分け強化（JS起動OK・最後に捕まえたclick表示）
  * CHANGES:
+ * - [v17.0.7-upload-btndead] debug=1時に画面上部バナーに「JS起動OK」を表示
+ * - [v17.0.7-upload-btndead] debug=1時に画面上部バナーに「最後に捕まえたclick」を表示
+ * - [v17.0.7-upload-btndead] クリックキャプチャ（capture=true）で拾えたclickを記録・表示
  * - [v17.0.7-upload-btndead] VERSION/BUILDを確実に表示（debug=1時に画面・コンソール両方に出力）
  * - [v17.0.7-upload-btndead] イベントハンドラの結びつきを詳細デバッグ（debug=1時にconsole.tableで一覧表示）
  * - [v17.0.7-upload-btndead] __bindOnclickCompat__初期化エラーを画面内ログに表示
  * - [v17.0.7-upload-btndead] debug=1時のみ、グローバルクリックキャプチャリスナー追加（透明オーバーレイ・pointer-events・z-index検出）
- * - [v17.0.7-upload-btndead] クリック時の例外を画面内ログに表示（コンソール不要）
  * - [v17.0.6-btndead1] onclick互換レイヤ実装（eval禁止・正規表現で関数呼び出しを解析）
  * - [v17.0.6-btndead1] __bindOnclickCompat__()でonclick属性をremoveしてaddEventListenerで付け直す（UI差分ゼロ）
  * - [v17.0.4-btnfix3] doGetでHtmlOutputを作り直さず、evaluate()の出力にsetContentで反映（sandbox設定を保持）
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-21_1348_airoom-upload-btndead
+ * BUILD_PARAM: ?b=2026-01-21_1406_airoom-upload-btndead
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
 const APP_VERSION = "v17.0.7-upload-btndead";
-const BUILD_ID = "2026-01-21_1348_airoom-upload-btndead";
+const BUILD_ID = "2026-01-21_1406_airoom-upload-btndead";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();
