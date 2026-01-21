@@ -3,7 +3,7 @@
   FILE: index.html
   VERSION: v17.0.11-survival
   DATE(JST): 2026-01-22 00:10:00 JST
-  SERIAL: 2026-01-22_001500_airroom-survival-compat-fix2
+  SERIAL: 2026-01-22_003000_airroom-survival-compat-final
   TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
   CHANGES:
   - 【v17.0.11-survival】P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
@@ -36,7 +36,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-22_001500_airroom-survival-compat-fix2
+  BUILD_PARAM: ?b=2026-01-22_003000_airroom-survival-compat-final
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -440,19 +440,17 @@
 <script>
           // --- BOOT MARKER ---
           // ★v17.0.11-survival: 関数公開を最優先で実行（SyntaxError発生前に確実に実行）★
+          // グローバルスコープに確実に公開するためのヘルパー関数
           (function() {
-            // 関数が定義される前に実行されるため、後で再実行される前提で準備
-            window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__ = null;
-            window.__AI_ROOM_EXPOSE_FUNCTIONS__ = function() {
-              if (!window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__) return;
+            window.__exposeFunction__ = function(name, func) {
+              if (typeof func !== 'function') return;
               try {
-                Object.assign(globalThis, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__);
-                Object.assign(window, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__);
-                try { if (window.parent && window.parent !== window) Object.assign(window.parent, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__); } catch(e){}
-                try { if (window.top && window.top !== window) Object.assign(window.top, window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__); } catch(e){}
-                console.log('[AI会議室] 関数公開完了（早期実行）:', Object.keys(window.__AI_ROOM_FUNCTIONS_TO_EXPOSE__).length, '個');
+                window[name] = func;
+                globalThis[name] = func;
+                try { if (window.parent && window.parent !== window) window.parent[name] = func; } catch(e){}
+                try { if (window.top && window.top !== window) window.top[name] = func; } catch(e){}
               } catch(e) {
-                console.error('[AI会議室] 関数公開エラー（早期実行）:', e);
+                console.error(`[AI会議室] 関数公開エラー(${name}):`, e);
               }
             };
           })();
@@ -991,8 +989,13 @@ function setMode(mode) {
     initManualSendTargets();
   }
 }
-// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
-window.setMode = setMode;
+// ★v17.0.11-survival: 関数の生存保証（定義直後に確実に公開）★
+if (typeof window.__exposeFunction__ === 'function') {
+  window.__exposeFunction__('setMode', setMode);
+} else {
+  window.setMode = setMode;
+  globalThis.setMode = setMode;
+}
 
 // ★修正：司会AIは参加者として選べないようにする（排他制御）★
 function toggleAgent(a) {
@@ -1033,16 +1036,31 @@ function insertTemplate() {
   const template = `\n--------------------------------------------------\n【ファイル名: index.html】\n(ここにコードを貼る)\n\n--------------------------------------------------\n【ファイル名: Code.gs】\n(ここにコードを貼る)\n`;
   t.value = t.value + template; t.focus();
 }
-// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
-window.insertTemplate = insertTemplate;
+// ★v17.0.11-survival: 関数の生存保証（定義直後に確実に公開）★
+if (typeof window.__exposeFunction__ === 'function') {
+  window.__exposeFunction__('insertTemplate', insertTemplate);
+} else {
+  window.insertTemplate = insertTemplate;
+  globalThis.insertTemplate = insertTemplate;
+}
 
 function resetInput() { document.getElementById('themeInput').value = ''; imagesBase64 = []; document.getElementById('previewArea').innerHTML = ''; }
-// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
-window.resetInput = resetInput;
+// ★v17.0.11-survival: 関数の生存保証（定義直後に確実に公開）★
+if (typeof window.__exposeFunction__ === 'function') {
+  window.__exposeFunction__('resetInput', resetInput);
+} else {
+  window.resetInput = resetInput;
+  globalThis.resetInput = resetInput;
+}
 
 function tryReset() { openModal('resetModal'); }
-// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
-window.tryReset = tryReset;
+// ★v17.0.11-survival: 関数の生存保証（定義直後に確実に公開）★
+if (typeof window.__exposeFunction__ === 'function') {
+  window.__exposeFunction__('tryReset', tryReset);
+} else {
+  window.tryReset = tryReset;
+  globalThis.tryReset = tryReset;
+}
 
 function performReset() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
 // ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
@@ -1557,8 +1575,13 @@ function uploadCode(){
     google.script.run.withSuccessHandler(alert).uploadToGithub(prompt("File?","Code.gs"),c);
   }
 }
-// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
-window.uploadCode = uploadCode;
+// ★v17.0.11-survival: 関数の生存保証（定義直後に確実に公開）★
+if (typeof window.__exposeFunction__ === 'function') {
+  window.__exposeFunction__('uploadCode', uploadCode);
+} else {
+  window.uploadCode = uploadCode;
+  globalThis.uploadCode = uploadCode;
+}
 
 // Image Handling
 async function handleFileSelect(e){
@@ -1616,8 +1639,13 @@ async function pasteFromClipboard(){
     console.warn('Clipboard read failed:', e);
   }
 }
-// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
-window.pasteFromClipboard = pasteFromClipboard;
+// ★v17.0.11-survival: 関数の生存保証（定義直後に確実に公開）★
+if (typeof window.__exposeFunction__ === 'function') {
+  window.__exposeFunction__('pasteFromClipboard', pasteFromClipboard);
+} else {
+  window.pasteFromClipboard = pasteFromClipboard;
+  globalThis.pasteFromClipboard = pasteFromClipboard;
+}
 
 function saveStorage(){
   try {
@@ -1680,8 +1708,13 @@ function openHistoryModal(){
             document.getElementById('logList').innerHTML = `<div style='padding:20px;text-align:center;color:#ef4444;'>履歴の読み込みに失敗: ${err?.message || err}</div>`;
           }).getLogList();
 }
-// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
-window.openHistoryModal = openHistoryModal;
+// ★v17.0.11-survival: 関数の生存保証（定義直後に確実に公開）★
+if (typeof window.__exposeFunction__ === 'function') {
+  window.__exposeFunction__('openHistoryModal', openHistoryModal);
+} else {
+  window.openHistoryModal = openHistoryModal;
+  globalThis.openHistoryModal = openHistoryModal;
+}
 
 function closeHistoryModal(){
   closeModal('historyModal');

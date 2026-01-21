@@ -2,8 +2,8 @@
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
  * VERSION: v17.0.11-survival
- * DATE(JST): 2026-01-22 00:10:00 JST
- * SERIAL: 2026-01-22_001000_airroom-survival-compat-fix
+ * DATE(JST): 2026-01-22 00:30:00 JST
+ * SERIAL: 2026-01-22_003000_airroom-survival-compat-final
  * TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
  * CHANGES:
  * - [v17.0.11-survival] P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
@@ -26,13 +26,13 @@
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-22_001000_airroom-survival-compat-fix
+ * BUILD_PARAM: ?b=2026-01-22_003000_airroom-survival-compat-final
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
 const APP_VERSION = "v17.0.11-survival";
-const BUILD_ID = "2026-01-22_001500_airroom-survival-compat-fix2";
+const BUILD_ID = "2026-01-22_003000_airroom-survival-compat-final";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();
