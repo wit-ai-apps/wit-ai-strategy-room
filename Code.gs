@@ -1,16 +1,16 @@
 /**
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
- * VERSION: v17.0.10-btndead-fix
- * DATE(JST): 2026-01-21 18:00:00 JST
- * SERIAL: 2026-01-21_180000_airroom-btndead-fix3
- * TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化＋起動セルフチェック）
+ * VERSION: v17.0.11-survival
+ * DATE(JST): 2026-01-22 00:01:00 JST
+ * SERIAL: 2026-01-22_000100_airroom-survival-compat
+ * TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
  * CHANGES:
+ * - [v17.0.11-survival] P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
+ * - [v17.0.11-survival] P0-2: 起動セルフチェックをアプリ内表示（古いキャッシュ検知→自動更新誘導、一回更新済みフラグでループ防止）
+ * - [v17.0.11-survival] P1: 原因の切り分けログ（debug=1時にAPP_VERSION/BUILD_ID、script読み込み順、主要関数の存在確認、Service Worker/Cache情報を画面内表示）
  * - [v17.0.10-btndead-fix] debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
  * - [v17.0.10-btndead-fix] 関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
- * - [v17.0.9-btndead-fix] 初期化エラーをキャッチして表示（debug=1時に初期化エラーを黒帯に表示）
- * - [v17.0.9-btndead-fix] 関数をwindowに明示的に公開（初期化の最上流でglobalThis/window/parent/topに公開）
- * - [v17.0.9-btndead-fix] SyntaxError対策（初期化時のtry-catchでエラーを捕捉）
  * - [v17.0.8-version-sync] バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
  * - [v17.0.8-version-sync] ボタンクリックの発火可視化（debug=1時に黒帯にclicked: <button-id or name>を表示）
  * - [v17.0.7-upload-btndead] debug=1時に画面上部バナーに「JS起動OK」を表示
@@ -26,13 +26,13 @@
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-21_190100_merge-btndead-fix
+ * BUILD_PARAM: ?b=2026-01-22_000100_airroom-survival-compat
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
-const APP_VERSION = "v17.0.10-btndead-fix";
-const BUILD_ID = "2026-01-21_190100_merge-btndead-fix";
+const APP_VERSION = "v17.0.11-survival";
+const BUILD_ID = "2026-01-22_000100_airroom-survival-compat";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();

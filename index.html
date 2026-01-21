@@ -1,16 +1,16 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.10-btndead-fix
-  DATE(JST): 2026-01-21 18:00:00 JST
-  SERIAL: 2026-01-21_180000_airroom-btndead-fix3
-  TITLE: ボタン不動の根本修正（SyntaxError修正＋関数のwindow公開強化＋起動セルフチェック）
+  VERSION: v17.0.11-survival
+  DATE(JST): 2026-01-22 00:01:00 JST
+  SERIAL: 2026-01-22_000100_airroom-survival-compat
+  TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
   CHANGES:
+  - 【v17.0.11-survival】P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
+  - 【v17.0.11-survival】P0-2: 起動セルフチェックをアプリ内表示（古いキャッシュ検知→自動更新誘導、一回更新済みフラグでループ防止）
+  - 【v17.0.11-survival】P1: 原因の切り分けログ（debug=1時にAPP_VERSION/BUILD_ID、script読み込み順、主要関数の存在確認、Service Worker/Cache情報を画面内表示）
   - 【v17.0.10-btndead-fix】debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
   - 【v17.0.10-btndead-fix】関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
-  - 【v17.0.9-btndead-fix】初期化エラーをキャッチして表示（debug=1時に初期化エラーを黒帯に表示）
-  - 【v17.0.9-btndead-fix】関数をwindowに明示的に公開（初期化の最上流でglobalThis/window/parent/topに公開）
-  - 【v17.0.9-btndead-fix】SyntaxError対策（初期化時のtry-catchでエラーを捕捉）
   - 【v17.0.8-version-sync】バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
   - 【v17.0.8-version-sync】ボタンクリックの発火可視化（debug=1時に黒帯にclicked: <button-id or name>を表示）
   - 【v17.0.7-upload-btndead】debug=1時に画面上部バナーに「JS起動OK」を表示
@@ -36,7 +36,7 @@
   - 【重要】UI原則固定: 設定モーダル内の項目追加、カード内の最小ボタン追加は許可
   - 前回のv16.3.8-hf1-fullの機能は全て維持（CUT検知・設定モーダル・インジケータ等）
   AUTHOR: Rex
-  BUILD_PARAM: ?b=2026-01-21_190100_merge-btndead-fix
+  BUILD_PARAM: ?b=2026-01-22_000100_airroom-survival-compat
   DEBUG_PARAM: &debug=1
   REPO: wit-ai-apps/wit-ai-strategy-room
 -->
@@ -439,17 +439,64 @@
 
 <script>
           // --- BOOT MARKER ---
-          // ★v17.0.9-btndead-fix: 初期化エラーをキャッチして表示（debug=1時）★
+          // ★v17.0.11-survival: 初期化エラーをキャッチして表示（debug=1時）＋P1原因の切り分けログ★
           (function() {
             try {
               window.__AI_ROOM_VERSION__ = '<?= APP_VERSION ?>';
               window.__AI_ROOM_BUILD__ = '<?= BUILD_ID ?>';
               window.__LAST_CLICK__ = null; // ★v17.0.7-upload-btndead: 最後に捕まえたclickを記録★
               
-              // ★v17.0.9-btndead-fix: VERSION/BUILDを確実に表示（debug=1時）★
+              // ★v17.0.11-survival: P1 原因の切り分けログ（debug=1時）★
               const urlParams = new URLSearchParams(window.location.search);
-              if (urlParams.get('debug') === '1') {
+              const debugMode = urlParams.get('debug') === '1';
+              
+              if (debugMode) {
                 console.log('[AI会議室] JS起動OK | VERSION:', window.__AI_ROOM_VERSION__, 'BUILD:', window.__AI_ROOM_BUILD__);
+                
+                // script tagの読み込み順（簡易：主要JSのロード完了を時系列で記録）
+                window.__AI_ROOM_SCRIPT_LOAD_ORDER__ = [];
+                const originalAppendChild = document.head.appendChild;
+                document.head.appendChild = function(node) {
+                  if (node.tagName === 'SCRIPT' && node.src) {
+                    window.__AI_ROOM_SCRIPT_LOAD_ORDER__.push({
+                      time: new Date().toISOString(),
+                      src: node.src
+                    });
+                  }
+                  return originalAppendChild.call(this, node);
+                };
+                
+                // windowに生えている主要関数の一覧
+                const mainFunctions = [
+                  'setMode', 'openSettingsModal', 'openHistoryModal', 'tryReset',
+                  'insertTemplate', 'resetInput', 'uploadCode', 'pasteFromClipboard'
+                ];
+                const functionStatus = {};
+                mainFunctions.forEach(funcName => {
+                  functionStatus[funcName] = typeof window[funcName] === 'function';
+                });
+                console.log('[AI会議室] 主要関数の存在確認:', functionStatus);
+                
+                // Service Worker関連
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.getRegistration().then(reg => {
+                    if (reg) {
+                      console.log('[AI会議室] Service Worker登録あり:', reg.scope);
+                      if (navigator.serviceWorker.controller) {
+                        console.log('[AI会議室] Service Worker controller:', navigator.serviceWorker.controller.scriptURL);
+                      }
+                    } else {
+                      console.log('[AI会議室] Service Worker登録なし');
+                    }
+                  }).catch(e => console.warn('[AI会議室] Service Worker確認エラー:', e));
+                  
+                  if ('caches' in window) {
+                    caches.keys().then(keys => {
+                      console.log('[AI会議室] Cache数:', keys.length, keys);
+                    }).catch(e => console.warn('[AI会議室] Cache確認エラー:', e));
+                  }
+                }
+                
                 // 画面にも確実に表示（debug=1時・DOMContentLoaded後）
                 if (document.readyState === 'loading') {
                   document.addEventListener('DOMContentLoaded', () => {
@@ -778,6 +825,8 @@ function openModal(id) {
     el.style.display = 'flex';
   }
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.openModal = openModal;
 
 // ★追加：closeModal関数（欠品ゼロ対策）★
 function closeModal(id) {
@@ -786,6 +835,8 @@ function closeModal(id) {
     el.style.display = 'none';
   }
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.closeModal = closeModal;
 
 // ★v17.0.0追加：インジケータ更新関数（方式に応じて表示を切り替え）★
 function updateIndicator(indicatorId, state, text) {
@@ -876,12 +927,17 @@ function initUI() {
 }
 
 function updateClock(){document.getElementById('clock').innerText=new Date().toLocaleString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.updateClock = updateClock;
+
 function setFontSize(s) {
   const r = document.body; document.querySelectorAll('.font-btn').forEach(b=>b.classList.remove('active'));
   if(s==='small'){r.style.fontSize='14px'; document.querySelectorAll('.font-btn')[0].classList.add('active');}
   if(s==='medium'){r.style.fontSize='16px'; document.querySelectorAll('.font-btn')[1].classList.add('active');}
   if(s==='large'){r.style.fontSize='20px'; document.querySelectorAll('.font-btn')[2].classList.add('active');}
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.setFontSize = setFontSize;
 
 function setMode(mode) {
   currentMode = mode;
@@ -899,6 +955,8 @@ function setMode(mode) {
     initManualSendTargets();
   }
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.setMode = setMode;
 
 // ★修正：司会AIは参加者として選べないようにする（排他制御）★
 function toggleAgent(a) {
@@ -939,10 +997,20 @@ function insertTemplate() {
   const template = `\n--------------------------------------------------\n【ファイル名: index.html】\n(ここにコードを貼る)\n\n--------------------------------------------------\n【ファイル名: Code.gs】\n(ここにコードを貼る)\n`;
   t.value = t.value + template; t.focus();
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.insertTemplate = insertTemplate;
 
 function resetInput() { document.getElementById('themeInput').value = ''; imagesBase64 = []; document.getElementById('previewArea').innerHTML = ''; }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.resetInput = resetInput;
+
 function tryReset() { openModal('resetModal'); }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.tryReset = tryReset;
+
 function performReset() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.performReset = performReset;
 
 function buildProgressBar(totalSteps) {
   const bar = document.getElementById('progressBarInner');
@@ -964,6 +1032,8 @@ function startProcess() {
   document.getElementById('statusText').innerText = "🚀 実行中...";
   if(currentMode === 'auto') startAuto(theme); else startManual(theme);
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.startProcess = startProcess;
 
 // ★修正：オート会話ループをasync/awaitに変更（必ず次へ進む構造）★
 async function startAuto(theme) {
@@ -1247,6 +1317,8 @@ function toggleManualTarget(agent) {
   }
   initManualSendTargets();
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.toggleManualTarget = toggleManualTarget;
 
 // ★v17.0.0追加：全員選択★
 function selectAllManualTargets() {
@@ -1254,12 +1326,16 @@ function selectAllManualTargets() {
   manualSelectedTargets = AGENTS.filter(a => a !== mc);
   initManualSendTargets();
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.selectAllManualTargets = selectAllManualTargets;
 
 // ★v17.0.0追加：選択解除★
 function clearManualTargets() {
   manualSelectedTargets = [];
   initManualSendTargets();
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.clearManualTargets = clearManualTargets;
 
 // ★v17.0.0追加：前回送信先表示更新★
 function updateManualSendLastTarget() {
@@ -1445,6 +1521,8 @@ function uploadCode(){
     google.script.run.withSuccessHandler(alert).uploadToGithub(prompt("File?","Code.gs"),c);
   }
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.uploadCode = uploadCode;
 
 // Image Handling
 async function handleFileSelect(e){
@@ -1502,6 +1580,8 @@ async function pasteFromClipboard(){
     console.warn('Clipboard read failed:', e);
   }
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.pasteFromClipboard = pasteFromClipboard;
 
 function saveStorage(){
   try {
@@ -1564,21 +1644,29 @@ function openHistoryModal(){
             document.getElementById('logList').innerHTML = `<div style='padding:20px;text-align:center;color:#ef4444;'>履歴の読み込みに失敗: ${err?.message || err}</div>`;
           }).getLogList();
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.openHistoryModal = openHistoryModal;
 
 function closeHistoryModal(){
   closeModal('historyModal');
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.closeHistoryModal = closeHistoryModal;
 
 // ★追加：設定モーダルを開く★
 function openSettingsModal() {
   applySettingsToUI(); // UIに現在の設定を反映
   openModal('settingsModal');
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.openSettingsModal = openSettingsModal;
 
 // ★追加：設定モーダルを閉じる★
 function closeSettingsModal() {
   closeModal('settingsModal');
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.closeSettingsModal = closeSettingsModal;
 
 // ★追加：設定をUIに反映★
 function applySettingsToUI() {
@@ -1603,6 +1691,8 @@ function applySettingsToUI() {
     }
   });
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.applySettingsToUI = applySettingsToUI;
 
 // ★追加：設定を保存してモーダルを閉じる★
 function saveSettingsAndClose() {
@@ -1634,6 +1724,8 @@ function saveSettingsAndClose() {
   saveSettings();
   closeSettingsModal();
 }
+// ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
+window.saveSettingsAndClose = saveSettingsAndClose;
 
 // ★追加：要約レベルと会話トーンをinstrに付与する関数★
 function _applySettingsToInstruction_(baseInstr) {
@@ -2226,31 +2318,33 @@ function __initClickObserver__() {
     
     console.log('[AI会議室] 関数公開完了:', Object.keys(functionsToExpose).length, '個');
     
-    // ★v17.0.10-btndead-fix: debug=1時の起動セルフチェック（必須関数がwindowに存在するか一覧でログ出し）★
+    // ★v17.0.11-survival: 起動セルフチェック（必須関数がwindowに存在するかチェック・一般ユーザー向けアプリ内表示）★
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('debug') === '1') {
-      const requiredFunctions = [
-        'setMode', 'openSettingsModal', 'openHistoryModal', 'tryReset',
-        'insertTemplate', 'resetInput', 'uploadCode', 'pasteFromClipboard',
-        'openModal', 'closeModal', 'closeHistoryModal', 'closeSettingsModal',
-        'performReset', 'loadLog', 'deleteLog', 'openCode', 'copyCode',
-        'startProcess', 'startAuto', 'startManual', 'sendManualMessage',
-        'selectAllManualTargets', 'clearManualTargets', 'toggleManualTarget',
-        'setFollowupTarget', 'setFontSize', 'updateClock', 'saveSettingsAndClose',
-        'applySettingsToUI', 'handleFileSelect'
-      ];
-      
-      const missingFunctions = [];
-      const existingFunctions = [];
-      
-      requiredFunctions.forEach(funcName => {
-        if (typeof window[funcName] === 'function') {
-          existingFunctions.push(funcName);
-        } else {
-          missingFunctions.push(funcName);
-        }
-      });
-      
+    const debugMode = urlParams.get('debug') === '1';
+    
+    const requiredFunctions = [
+      'setMode', 'openSettingsModal', 'openHistoryModal', 'tryReset',
+      'insertTemplate', 'resetInput', 'uploadCode', 'pasteFromClipboard',
+      'openModal', 'closeModal', 'closeHistoryModal', 'closeSettingsModal',
+      'performReset', 'loadLog', 'deleteLog', 'openCode', 'copyCode',
+      'startProcess', 'startAuto', 'startManual', 'sendManualMessage',
+      'selectAllManualTargets', 'clearManualTargets', 'toggleManualTarget',
+      'setFollowupTarget', 'setFontSize', 'updateClock', 'saveSettingsAndClose',
+      'applySettingsToUI', 'handleFileSelect'
+    ];
+    
+    const missingFunctions = [];
+    const existingFunctions = [];
+    
+    requiredFunctions.forEach(funcName => {
+      if (typeof window[funcName] === 'function') {
+        existingFunctions.push(funcName);
+      } else {
+        missingFunctions.push(funcName);
+      }
+    });
+    
+    if (debugMode) {
       console.log('[AI会議室] 起動セルフチェック結果:');
       console.log('  ✅ 存在する関数:', existingFunctions.length, '個', existingFunctions);
       if (missingFunctions.length > 0) {
@@ -2266,6 +2360,30 @@ function __initClickObserver__() {
         }, 200);
       } else {
         console.log('  ✅ すべての必須関数がwindowに存在します');
+      }
+    }
+    
+    // ★v17.0.11-survival: P0-2 起動セルフチェックをアプリ内表示（一般ユーザー向け・古いキャッシュ検知→自動更新誘導）★
+    if (missingFunctions.length > 0) {
+      // 一回更新済みフラグをチェック（ループ防止）
+      const updateFlag = sessionStorage.getItem('__airoom_update_attempted');
+      if (!updateFlag) {
+        // 画面内に「読み込みが古い可能性。更新します」を表示
+        const toast = document.createElement('div');
+        toast.id = '__airoom_update_toast';
+        toast.style.cssText = 'position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#b00020;color:#fff;padding:12px 20px;border-radius:8px;z-index:99999;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+        toast.innerHTML = '読み込みが古い可能性があります。更新します...';
+        document.body.appendChild(toast);
+        
+        // 一回更新済みフラグを設定
+        sessionStorage.setItem('__airoom_update_attempted', '1');
+        
+        // 最新BUILD_IDで自動更新誘導
+        const currentBuild = window.__AI_ROOM_BUILD__ || '<?= BUILD_ID ?>';
+        const newUrl = window.location.pathname + '?b=' + currentBuild + (debugMode ? '&debug=1' : '');
+        setTimeout(() => {
+          location.replace(newUrl);
+        }, 1000);
       }
     }
   } catch (e) {
