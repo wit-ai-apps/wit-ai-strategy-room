@@ -16,6 +16,9 @@
   - 【v17.0.15-displayname-help】設定画面のラベルを変更（Yui→ChatGPT、Rex→Cursor、Yui/Rexの文字を削除）
   - 【v17.0.16-displayname-sync】ホーム画面の全表示箇所をnormalizeDisplayName経由に統一（AIチップ・司会プルダウン・マニュアル送信先）
   - 【v17.0.16-displayname-sync】設定保存後にUIを再描画（initUI/initManualSendTargetsを呼び出し）
+  - 【v17.0.17-image-paste-fix】handleFileSelect関数をwindowに公開（GAS環境での確実なアクセス保証）
+  - 【v17.0.17-image-paste-fix】openFileInput関数を追加・公開（画像ボタンのonclickを関数経由に変更）
+  - 【v17.0.17-image-paste-fix】pasteFromClipboard関数の公開を確認・強化
   - 【v17.0.10-btndead-fix】debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
   - 【v17.0.10-btndead-fix】関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
   - 【v17.0.8-version-sync】バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
@@ -255,7 +258,7 @@
     
     <div style="margin-top:15px; display:flex; flex-wrap:wrap; gap:10px;">
       <input type="file" id="fileInput" hidden multiple onchange="handleFileSelect(event)">
-      <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">📷 画像</button>
+      <button class="btn btn-secondary" onclick="openFileInput()">📷 画像</button>
       <button class="btn btn-secondary" onclick="pasteFromClipboard()">📋 貼付</button>
       <button class="btn btn-secondary" onclick="insertTemplate()" style="color:#3b82f6; border-color:#3b82f6;">📄 Code貼付枠</button>
       <button class="btn btn-secondary" onclick="resetInput()">🧹 クリア</button>
@@ -1732,6 +1735,13 @@ async function handleFileSelect(e){
     }
   }
 }
+// ★v17.0.17-image-paste-fix追加：handleFileSelect関数をwindowに公開（GAS環境での確実なアクセス保証）★
+if (typeof window.__exposeFunction__ === 'function') {
+  window.__exposeFunction__('handleFileSelect', handleFileSelect);
+} else {
+  window.handleFileSelect = handleFileSelect;
+  globalThis.handleFileSelect = handleFileSelect;
+}
 function compress(b){
   return new Promise(r=>{
     const f = new FileReader();
@@ -2682,6 +2692,8 @@ function __initClickObserver__() {
     if (typeof insertTemplate === 'function') window.insertTemplate = insertTemplate;
     if (typeof resetInput === 'function') window.resetInput = resetInput;
     if (typeof pasteFromClipboard === 'function') window.pasteFromClipboard = pasteFromClipboard;
+    if (typeof handleFileSelect === 'function') window.handleFileSelect = handleFileSelect;
+    if (typeof openFileInput === 'function') window.openFileInput = openFileInput;
     if (typeof uploadCode === 'function') window.uploadCode = uploadCode;
     if (typeof openModal === 'function') window.openModal = openModal;
     if (typeof closeModal === 'function') window.closeModal = closeModal;

@@ -1,10 +1,10 @@
 /**
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
- * VERSION: v17.0.16-displayname-sync
- * DATE(JST): 2026-01-22 11:21:16 JST
- * SERIAL: 2026-01-22_112116_displayname-sync
- * TITLE: AI表示名カスタマイズがホーム画面に反映されない件の修正（全表示箇所をnormalizeDisplayName経由に統一）
+ * VERSION: v17.0.17-image-paste-fix
+ * DATE(JST): 2026-01-22 11:35:00 JST
+ * SERIAL: 2026-01-22_113500_image-paste-fix
+ * TITLE: 画像ボタンと貼付けボタンが動かない件の修正（handleFileSelect/openFileInput関数のwindow公開）
  * CHANGES:
  * - [GEMINI提案] テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避：1178行目付近のclass属性を含むテンプレートリテラルを文字列連結に書き換え）
  * - [GEMINI提案] 主要なハンドラ関数をwindowオブジェクトに明示的に代入（GAS Sandbox環境での確実なアクセス保証）
@@ -28,13 +28,13 @@
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-22_112116_displayname-sync
+ * BUILD_PARAM: ?b=2026-01-22_113500_image-paste-fix
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
-const APP_VERSION = "v17.0.16-displayname-sync";
-const BUILD_ID = "2026-01-22_112116_displayname-sync";
+const APP_VERSION = "v17.0.17-image-paste-fix";
+const BUILD_ID = "2026-01-22_113500_image-paste-fix";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();
