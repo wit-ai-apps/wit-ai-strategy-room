@@ -33,8 +33,8 @@
  */
 
 const APP_NAME    = "AI Strategy Room";
-const APP_VERSION = "v17.0.13-displayname";
-const BUILD_ID = "2026-01-22_013725_ai-name-customize";
+const APP_VERSION = "v17.0.14-displayname-help";
+const BUILD_ID = "2026-01-22_104500_ai-name-customize-help";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();
