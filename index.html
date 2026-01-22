@@ -1,10 +1,10 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.15-displayname-help
-  DATE(JST): 2026-01-22 10:55:00 JST
-  SERIAL: 2026-01-22_105500_ai-name-label-fix
-  TITLE: AI表示名のカスタマイズ機能（設定画面のラベルをYui/Rex→ChatGPT/Cursorに変更）
+  VERSION: v17.0.16-displayname-sync
+  DATE(JST): 2026-01-22 11:21:16 JST
+  SERIAL: 2026-01-22_112116_displayname-sync
+  TITLE: AI表示名カスタマイズがホーム画面に反映されない件の修正（全表示箇所をnormalizeDisplayName経由に統一）
   CHANGES:
   - 【v17.0.13-displayname】AI表示名のカスタマイズ機能追加（設定でAI表示名を編集可能、localStorageに保存）
   - 【v17.0.13-displayname】デフォルト表示名を変更（YUI→ChatGPT、REX→Cursor）
@@ -14,6 +14,8 @@
   - 【v17.0.13-displayname】saveSettingsAndClose関数でlocalStorageにも保存（バリデーション：trim、空欄不可、20文字制限、XSS防止）
   - 【v17.0.13-displayname-help】設定モーダルの説明文追加（「呼び名を自由に決めてください」を追加）
   - 【v17.0.15-displayname-help】設定画面のラベルを変更（Yui→ChatGPT、Rex→Cursor、Yui/Rexの文字を削除）
+  - 【v17.0.16-displayname-sync】ホーム画面の全表示箇所をnormalizeDisplayName経由に統一（AIチップ・司会プルダウン・マニュアル送信先）
+  - 【v17.0.16-displayname-sync】設定保存後にUIを再描画（initUI/initManualSendTargetsを呼び出し）
   - 【v17.0.10-btndead-fix】debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
   - 【v17.0.10-btndead-fix】関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
   - 【v17.0.8-version-sync】バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
@@ -1037,11 +1039,14 @@ function initUI() {
     // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
     span.className = 'agent-badge ' + (selected.includes(a) ? 'selected' : '');
     span.setAttribute('data-agent', a); span.id = `badge-${a}`;
-    span.innerText = a.charAt(0).toUpperCase() + a.slice(1);
+    // ★v17.0.16-displayname-sync修正：表示名をnormalizeDisplayName経由に変更（設定値が反映される）★
+    span.innerText = normalizeDisplayName(a, null);
     span.onclick = () => toggleAgent(a);
     con.appendChild(span);
     const opt = document.createElement('option');
-    opt.value = a; opt.innerText = a.charAt(0).toUpperCase() + a.slice(1);
+    opt.value = a;
+    // ★v17.0.16-displayname-sync修正：司会プルダウンの表示名もnormalizeDisplayName経由に変更（設定値が反映される）★
+    opt.innerText = normalizeDisplayName(a, null);
     mcSel.appendChild(opt);
   });
   
@@ -1973,6 +1978,15 @@ function saveSettingsAndClose() {
   
   // settingsも保存（後方互換性のため）
   saveSettings();
+  
+  // ★v17.0.16-displayname-sync追加：設定保存後にUIを再描画（AIチップ・司会プルダウン・マニュアル送信先の表示名を更新）★
+  if (typeof initUI === 'function') {
+    initUI();
+  }
+  if (typeof initManualSendTargets === 'function') {
+    initManualSendTargets();
+  }
+  
   closeSettingsModal();
 }
 // ★v17.0.11-survival: 関数の生存保証（windowへの確実な公開）★
