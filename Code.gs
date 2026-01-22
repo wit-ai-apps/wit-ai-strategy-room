@@ -1,10 +1,10 @@
 /**
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
- * VERSION: v17.0.11-survival
- * DATE(JST): 2026-01-22 00:45:00 JST
- * SERIAL: 2026-01-22_004500_airroom-gemini-fix
- * TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
+ * VERSION: v17.0.13-displayname
+ * DATE(JST): 2026-01-22 01:37:25 JST
+ * SERIAL: 2026-01-22_013725_ai-name-customize
+ * TITLE: AI表示名のカスタマイズ機能（設定でAI表示名を編集可能、デフォルト：YUI→ChatGPT、REX→Cursor）
  * CHANGES:
  * - [GEMINI提案] テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避：1178行目付近のclass属性を含むテンプレートリテラルを文字列連結に書き換え）
  * - [GEMINI提案] 主要なハンドラ関数をwindowオブジェクトに明示的に代入（GAS Sandbox環境での確実なアクセス保証）
@@ -28,13 +28,13 @@
  * - [v17.0.4-btnfix3] sandbox(IFRAME)を明示設定（ボタン/onclickが全滅する環境差を回避）
  * - [v17.0.2-btnfix] VERSION/BUILDの一致、debug=1時のバナー強化は継続
  * AUTHOR: Rex
- * BUILD_PARAM: ?b=2026-01-22_004500_airroom-gemini-fix
+ * BUILD_PARAM: ?b=2026-01-22_013725_ai-name-customize
  * DEBUG_PARAM: &debug=1
  */
 
 const APP_NAME    = "AI Strategy Room";
-const APP_VERSION = "v17.0.11-survival";
-const BUILD_ID = "2026-01-22_004500_airroom-gemini-fix";
+const APP_VERSION = "v17.0.13-displayname";
+const BUILD_ID = "2026-01-22_013725_ai-name-customize";
 const AUTHOR = "Rex";
 
 const SP = PropertiesService.getScriptProperties();

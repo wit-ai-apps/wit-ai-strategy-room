@@ -1,16 +1,17 @@
 <!--
   APP: AI Strategy Room (AI会議室)
   FILE: index.html
-  VERSION: v17.0.11-survival
-  DATE(JST): 2026-01-22 00:10:00 JST
-  SERIAL: 2026-01-22_004500_airroom-gemini-fix
-  TITLE: ボタン不動の根本修正（関数の生存保証＋起動セルフチェックのアプリ内表示＋原因の切り分けログ）
+  VERSION: v17.0.13-displayname
+  DATE(JST): 2026-01-22 01:37:25 JST
+  SERIAL: 2026-01-22_013725_ai-name-customize
+  TITLE: AI表示名のカスタマイズ機能（設定でAI表示名を編集可能、デフォルト：YUI→ChatGPT、REX→Cursor）
   CHANGES:
-  - 【GEMINI提案】テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避：1178行目付近のclass属性を含むテンプレートリテラルを文字列連結に書き換え）
-  - 【GEMINI提案】主要なハンドラ関数をwindowオブジェクトに明示的に代入（GAS Sandbox環境での確実なアクセス保証）
-  - 【v17.0.11-survival】P0-1: クリック先関数の生存保証（主要関数を定義直後にwindowに公開）
-  - 【v17.0.11-survival】P0-2: 起動セルフチェックをアプリ内表示（古いキャッシュ検知→自動更新誘導、一回更新済みフラグでループ防止）
-  - 【v17.0.11-survival】P1: 原因の切り分けログ（debug=1時にAPP_VERSION/BUILD_ID、script読み込み順、主要関数の存在確認、Service Worker/Cache情報を画面内表示）
+  - 【v17.0.13-displayname】AI表示名のカスタマイズ機能追加（設定でAI表示名を編集可能、localStorageに保存）
+  - 【v17.0.13-displayname】デフォルト表示名を変更（YUI→ChatGPT、REX→Cursor）
+  - 【v17.0.13-displayname】getDisplayName関数追加（localStorage読み込み、デフォルトフォールバック、XSS防止）
+  - 【v17.0.13-displayname】normalizeDisplayName関数をgetDisplayName経由に変更（全表示箇所で統一）
+  - 【v17.0.13-displayname】設定モーダルのプレースホルダー更新（Yui→ChatGPT、Rex→Cursor）
+  - 【v17.0.13-displayname】saveSettingsAndClose関数でlocalStorageにも保存（バリデーション：trim、空欄不可、20文字制限、XSS防止）
   - 【v17.0.10-btndead-fix】debug=1時の起動セルフチェック追加（必須関数がwindowに存在するか一覧でログ出し）
   - 【v17.0.10-btndead-fix】関数公開をwindow.onloadより前に実行（onclickが呼ばれる前に確実に公開）
   - 【v17.0.8-version-sync】バージョン表示の単一ソース化（APP_VERSIONテンプレ変数で統一：title/app-meta/window.__AI_ROOM_VERSION__）
@@ -399,7 +400,7 @@
       <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:#f8fafc;border-radius:8px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <label style="width:80px;font-size:0.85rem;">Yui:</label>
-          <input type="text" id="customName-yui" placeholder="Yui（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+          <input type="text" id="customName-yui" placeholder="ChatGPT（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <label style="width:80px;font-size:0.85rem;">Gemini:</label>
@@ -407,7 +408,7 @@
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <label style="width:80px;font-size:0.85rem;">Rex:</label>
-          <input type="text" id="customName-rex" placeholder="Rex（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
+          <input type="text" id="customName-rex" placeholder="Cursor（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <label style="width:80px;font-size:0.85rem;">DeepSeek:</label>
@@ -429,7 +430,7 @@
           <label style="width:80px;font-size:0.85rem;">Dolphin:</label>
           <input type="text" id="customName-dolphin" placeholder="Dolphin（デフォルト）" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.85rem;">
         </div>
-        <div style="font-size:0.75rem;color:#64748b;margin-top:4px;">※ 空欄の場合はデフォルト名（プラットフォーム名）が使用されます</div>
+        <div style="font-size:0.75rem;color:#64748b;margin-top:4px;">※ 空欄の場合はデフォルト名（Yui→ChatGPT、Rex→Cursor等）が使用されます。最大20文字まで入力可能です。</div>
       </div>
     </div>
   </div>
@@ -568,6 +569,18 @@
           // グローバルに公開（debug=1時の更新用）
           window._updateDebugBanner_ = _updateDebugBanner_;
 const AGENTS = ['yui','gemini','rex','deepseek','llama','qwen','mistral','dolphin'];
+// ★v17.0.13-displayname追加：AI表示名のデフォルト値（今後の標準名）★
+const DEFAULT_DISPLAY_NAMES = {
+  'yui': 'ChatGPT',
+  'gemini': 'Gemini',
+  'rex': 'Cursor',
+  'deepseek': 'DeepSeek',
+  'llama': 'Llama',
+  'qwen': 'Qwen',
+  'mistral': 'Mistral',
+  'dolphin': 'Dolphin'
+};
+const AI_DISPLAY_NAMES_STORAGE_KEY = 'ai_display_names';
 let selected = ['yui','gemini','rex','deepseek'];
 let currentMode = null;
 let imagesBase64 = []; let context = ""; let sessionId = "SESS_"+Date.now();
@@ -617,6 +630,92 @@ function saveSettings() {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (e) {
     console.warn('Settings save failed:', e);
+  }
+}
+
+// ★v17.0.13-displayname追加：AI表示名を取得する関数（localStorage読み込み、デフォルトフォールバック、XSS防止）★
+function getDisplayName(agentKey) {
+  if (!agentKey || typeof agentKey !== 'string') {
+    return 'UNKNOWN';
+  }
+  
+  const lowerKey = agentKey.toLowerCase().trim();
+  
+  // localStorageから読み込み
+  try {
+    const saved = localStorage.getItem(AI_DISPLAY_NAMES_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object' && parsed[lowerKey]) {
+        const customName = String(parsed[lowerKey]).trim();
+        if (customName && customName.length > 0 && customName.length <= 20) {
+          // XSS防止：HTMLエスケープ
+          const div = document.createElement('div');
+          div.textContent = customName;
+          return div.innerHTML;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('AI display names load failed:', e);
+  }
+  
+  // デフォルト値にフォールバック
+  if (DEFAULT_DISPLAY_NAMES[lowerKey]) {
+    return DEFAULT_DISPLAY_NAMES[lowerKey];
+  }
+  
+  return 'UNKNOWN';
+}
+
+// ★v17.0.13-displayname追加：AI表示名を保存する関数（バリデーション付き）★
+function saveDisplayNames(displayNames) {
+  if (!displayNames || typeof displayNames !== 'object') {
+    return false;
+  }
+  
+  const validated = {};
+  let hasValid = false;
+  
+  for (const key in displayNames) {
+    if (displayNames.hasOwnProperty(key)) {
+      const lowerKey = key.toLowerCase().trim();
+      let value = String(displayNames[key] || '').trim();
+      
+      // バリデーション：空欄は不可（デフォルトに戻す）
+      if (!value || value.length === 0) {
+        continue; // 空欄の場合は保存しない（デフォルトを使用）
+      }
+      
+      // バリデーション：20文字制限
+      if (value.length > 20) {
+        value = value.substring(0, 20);
+      }
+      
+      // XSS防止：HTMLエスケープ
+      const div = document.createElement('div');
+      div.textContent = value;
+      validated[lowerKey] = div.innerHTML;
+      hasValid = true;
+    }
+  }
+  
+  if (hasValid) {
+    try {
+      localStorage.setItem(AI_DISPLAY_NAMES_STORAGE_KEY, JSON.stringify(validated));
+      return true;
+    } catch (e) {
+      console.warn('AI display names save failed:', e);
+      return false;
+    }
+  } else {
+    // 全て空欄の場合はlocalStorageから削除（デフォルトを使用）
+    try {
+      localStorage.removeItem(AI_DISPLAY_NAMES_STORAGE_KEY);
+    } catch (e) {
+      console.warn('AI display names remove failed:', e);
+    }
+    return true;
   }
 }
 
@@ -753,52 +852,40 @@ function _handleCutContinuation_(speaker, responseText, context, imgs, sessionId
 
 // ★v17.0.0修正：表示名の正規化関数（固定名のみ、Alpha/Beta等を廃止、カスタム名優先）★
 function normalizeDisplayName(speaker, role) {
-  // ★v17.0.0追加：カスタム名を優先（ユーザーが設定した名前があればそれを使用）★
+  // ★v17.0.13-displayname修正：getDisplayNameを使用（localStorage優先、デフォルトフォールバック）★
   const lowerSpeaker = String(speaker || '').toLowerCase().trim();
-  if (settings.customNames && settings.customNames[lowerSpeaker] && settings.customNames[lowerSpeaker].trim()) {
-    return settings.customNames[lowerSpeaker].trim();
-  }
   
-  // 固定のAI名マップ（プラットフォーム名ベースで固定、勝手な変名禁止）
-  const fixedNameMap = {
-    // 既存のAI名（小文字で統一）
-    'yui': 'Yui',
-    'gemini': 'Gemini',
-    'rex': 'Rex',
-    'deepseek': 'DeepSeek',
-    'llama': 'Llama',
-    'qwen': 'Qwen',
-    'mistral': 'Mistral',
-    'dolphin': 'Dolphin',
-    // 役割名→モデル名（固定）
-    'imageanalyzer': 'Gemini',
-    'factchecker': 'Gemini',
-    'codereviewer': 'Rex',
-    'techadvisor': 'Rex',
-    'proposer': 'Gemini',
-    'opposer': 'Gemini',
-    'observer': 'Gemini',
-    // Alpha/Beta等の禁止名は全てUNKNOWN扱い
-    'alpha': 'UNKNOWN',
-    'beta': 'UNKNOWN',
-    'gamma': 'UNKNOWN',
-    'delta': 'UNKNOWN'
-  };
-  
-  // 固定マップに存在する場合
-  if (fixedNameMap[lowerSpeaker]) {
-    return fixedNameMap[lowerSpeaker];
+  // まずgetDisplayNameで表示名を取得（localStorage優先、デフォルトフォールバック）
+  const displayName = getDisplayName(lowerSpeaker);
+  if (displayName !== 'UNKNOWN') {
+    return displayName;
   }
   
   // 役割名の場合（roleから検索）
   if (role) {
     const roleKey = String(role).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    if (fixedNameMap[roleKey]) {
-      return fixedNameMap[roleKey];
+    // 役割名→モデル名のマッピング（固定）
+    const roleToAgentMap = {
+      'imageanalyzer': 'gemini',
+      'factchecker': 'gemini',
+      'codereviewer': 'rex',
+      'techadvisor': 'rex',
+      'proposer': 'gemini',
+      'opposer': 'gemini',
+      'observer': 'gemini'
+    };
+    if (roleToAgentMap[roleKey]) {
+      return getDisplayName(roleToAgentMap[roleKey]);
     }
   }
   
-  // ★v17.0.0修正：未定義・Alpha/Beta等は全てUNKNOWN扱い（勝手な名前を生成しない）★
+  // Alpha/Beta等の禁止名は全てUNKNOWN扱い
+  const bannedNames = ['alpha', 'beta', 'gamma', 'delta'];
+  if (bannedNames.includes(lowerSpeaker)) {
+    return 'UNKNOWN';
+  }
+  
+  // ★v17.0.13-displayname修正：未定義はUNKNOWN扱い（勝手な名前を生成しない）★
   return 'UNKNOWN';
 }
 
@@ -1796,14 +1883,34 @@ function applySettingsToUI() {
   document.getElementById('indicatorLate').checked = settings.indicators.late;
   document.getElementById('indicatorError').checked = settings.indicators.error;
   
-  // ★v17.0.0追加：カスタム名をUIに反映★
+  // ★v17.0.13-displayname修正：カスタム名をUIに反映（localStorage優先）★
   AGENTS.forEach(agent => {
     // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
     const inputEl = document.getElementById('customName-' + agent);
-    if (inputEl && settings.customNames && settings.customNames[agent]) {
-      inputEl.value = settings.customNames[agent];
-    } else if (inputEl) {
-      inputEl.value = '';
+    if (inputEl) {
+      // localStorageから読み込み
+      try {
+        const saved = localStorage.getItem(AI_DISPLAY_NAMES_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object' && parsed[agent]) {
+            // HTMLエスケープを解除（表示用）
+            const div = document.createElement('div');
+            div.innerHTML = parsed[agent];
+            inputEl.value = div.textContent || '';
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('AI display names load failed in applySettingsToUI:', e);
+      }
+      
+      // フォールバック：settings.customNamesから読み込み
+      if (settings.customNames && settings.customNames[agent]) {
+        inputEl.value = settings.customNames[agent];
+      } else {
+        inputEl.value = '';
+      }
     }
   });
 }
@@ -1823,21 +1930,46 @@ function saveSettingsAndClose() {
   settings.indicators.late = document.getElementById('indicatorLate').checked;
   settings.indicators.error = document.getElementById('indicatorError').checked;
   
-  // ★v17.0.0追加：カスタム名を保存★
+  // ★v17.0.13-displayname修正：カスタム名を保存（localStorage + settings.customNamesの両方に保存）★
   if (!settings.customNames) settings.customNames = {};
+  const displayNamesToSave = {};
+  
   AGENTS.forEach(agent => {
     // ★GEMINI提案: テンプレートリテラルを文字列連結に変更（GAS Sandbox環境でのSyntaxError回避）★
     const inputEl = document.getElementById('customName-' + agent);
     if (inputEl) {
-      const customName = inputEl.value.trim();
-      if (customName) {
-        settings.customNames[agent] = customName;
-      } else {
+      let customName = inputEl.value.trim();
+      
+      // バリデーション：空欄は不可（デフォルトに戻す）
+      if (!customName || customName.length === 0) {
+        // 空欄の場合はsettings.customNamesから削除（デフォルトを使用）
         delete settings.customNames[agent];
+        // displayNamesToSaveには追加しない（デフォルトを使用）
+      } else {
+        // バリデーション：20文字制限
+        if (customName.length > 20) {
+          customName = customName.substring(0, 20);
+          inputEl.value = customName; // UIにも反映
+        }
+        
+        // XSS防止：HTMLエスケープ（保存用）
+        const div = document.createElement('div');
+        div.textContent = customName;
+        const escapedName = div.innerHTML;
+        
+        // settings.customNamesに保存（後方互換性のため）
+        settings.customNames[agent] = customName;
+        
+        // localStorage用に保存（エスケープ済み）
+        displayNamesToSave[agent] = escapedName;
       }
     }
   });
   
+  // localStorageに保存（バリデーション付き）
+  saveDisplayNames(displayNamesToSave);
+  
+  // settingsも保存（後方互換性のため）
   saveSettings();
   closeSettingsModal();
 }
