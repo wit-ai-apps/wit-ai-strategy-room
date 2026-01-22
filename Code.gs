@@ -1,7 +1,7 @@
 /**
  * APP: AI Strategy Room (AI会議室)
  * FILE: Code.gs
- * VERSION: v17.0.13-displayname
+ * VERSION: v17.0.14-displayname-help
  * DATE(JST): 2026-01-22 10:45:00 JST
  * SERIAL: 2026-01-22_104500_ai-name-customize-help
  * TITLE: AI表示名のカスタマイズ機能（設定でAI表示名を編集可能、デフォルト：YUI→ChatGPT、REX→Cursor）+ 説明文追加
